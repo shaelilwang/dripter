@@ -126,7 +126,10 @@ $('doctor').addEventListener('click', async () => {
   if (!tab) return;
   const res = await askTab(tab.id, { type: 'AD_DOCTOR' });
   if (!res || !res.ok) {
-    say('Content script not running here. Reload the x.com tab.', 'err');
+    // Don't open the options page here: it would show the PREVIOUS report and
+    // read as though this run succeeded on this page.
+    say('Content script not running in this tab, so nothing was read. ' +
+        'Reload the x.com tab and try again.', 'err');
     return;
   }
   await chrome.storage.local.set({ lastDoctor: res.report });

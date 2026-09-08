@@ -68,11 +68,14 @@
     ],
 
     // The rendered body of a native Article, on the Article page itself.
+    // Deliberately NO generic tweetText fallback: it matched any ordinary
+    // post, which made the Doctor report a false green and let
+    // extractArticle() mistake a random post for an article body. When these
+    // all miss, extract.js falls through to thread extraction on purpose.
     articleBody: [
       '[data-testid="twitterArticleRichTextView"]',
       '[data-testid="articleNoteTweet"]',
       '[data-testid="longformRichTextView"]',
-      'article[role="article"] [data-testid="tweetText"]',
     ],
 
     // Article title on the Article page.
@@ -146,6 +149,68 @@
   }
 
   /**
+   * Describe what's ACTUALLY on this page, independent of our selectors.
+   *
+   * A selector miss is ambiguous on its own: the selector may be wrong, or
+   * the thing it looks for may simply not be here. This answers the second
+   * question directly — what link shapes, testids and content lengths exist —
+   * so a fix can be based on the real DOM rather than a guess about it.
+   */
+  function census() {
+    const tweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+
+    const normalize = (h) => String(h || '')
+      .replace(/^https?:\/\/(x|twitter)\.com/, '')
+      .replace(/\/status\/\d+/, '/status/N')
+      .replace(/\/\d{6,}/g, '/N')
+      .replace(/[?#].*$/, '');
+
+    const linkShapes = {};
+    const outbound = new Set();
+    const textLengths = [];
+    let withCard = 0;
+    let withThreadHint = 0;
+
+    for (const t of tweets) {
+      const body = t.querySelector('[data-testid="tweetText"]');
+      textLengths.push(body ? body.innerText.length : 0);
+      if (/show this thread/i.test(t.innerText)) withThreadHint++;
+      if (t.querySelector('[data-testid^="card."]')) withCard++;
+
+      for (const a of t.querySelectorAll('a[href]')) {
+        const href = a.getAttribute('href') || '';
+        const key = normalize(href);
+        linkShapes[key] = (linkShapes[key] || 0) + 1;
+        if (/^https?:\/\//.test(href) && !/(^|\/\/)(www\.)?(x|twitter)\.com/.test(href)) {
+          outbound.add(href.slice(0, 120));
+        }
+      }
+    }
+
+    // Any testid mentioning "article" — the fastest way to learn what X calls
+    // its long-form markup today without guessing.
+    const articleish = Array.from(new Set(
+      Array.from(document.querySelectorAll('[data-testid]'))
+        .map((e) => e.getAttribute('data-testid'))
+        .filter((v) => /artic/i.test(v))
+    ));
+
+    return {
+      posts: tweets.length,
+      withCard,
+      withThreadHint,
+      longestTexts: textLengths.sort((a, b) => b - a).slice(0, 8),
+      longPosts: textLengths.filter((n) => n >= 400).length,
+      articleish,
+      outbound: Array.from(outbound).slice(0, 10),
+      linkShapes: Object.entries(linkShapes)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([shape, n]) => ({ shape, n })),
+    };
+  }
+
+  /**
    * Run every selector against the current page and report hits/misses.
    * This is what the "Selector Doctor" button surfaces.
    */
@@ -171,9 +236,10 @@
       at: new Date().toISOString(),
       results: report,
       brokenKeys: report.filter((r) => !r.ok).map((r) => r.key),
+      census: census(),
     };
   }
 
   root.AD.SEL = SEL;
-  root.AD.sel = { pick, q, qa, doctor };
+  root.AD.sel = { pick, q, qa, doctor, census };
 })(globalThis);

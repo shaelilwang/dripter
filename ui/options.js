@@ -222,11 +222,31 @@ async function renderDoctor() {
   if (!lastDoctor) return;
 
   out.innerHTML = '';
+
+  const ageMs = Date.now() - new Date(lastDoctor.at).getTime();
+  const ageMin = Math.round(ageMs / 60000);
+
   const head = document.createElement('div');
   head.className = 'small muted';
   head.style.marginBottom = '8px';
   head.textContent = `${lastDoctor.path} · ${new Date(lastDoctor.at).toLocaleString()}`;
   out.appendChild(head);
+
+  // A stale report reads exactly like a fresh one, which sends you debugging
+  // the wrong page. If the Doctor can't reach the content script it leaves the
+  // previous run on screen, so say plainly how old this is and where it's from.
+  if (ageMs > 3 * 60 * 1000) {
+    const stale = document.createElement('div');
+    stale.className = 'notice';
+    stale.style.marginBottom = '10px';
+    stale.style.borderColor = 'color-mix(in srgb, var(--warn) 60%, transparent)';
+    stale.textContent =
+      `This reading is ${ageMin} minute${ageMin === 1 ? '' : 's'} old, taken on ` +
+      `${lastDoctor.path}. If you meant to check a different page, open it and ` +
+      `run Selector Doctor again — if the button reports an error, reload that ` +
+      `tab first so the content script attaches.`;
+    out.appendChild(stale);
+  }
 
   if (lastDoctor.brokenKeys.length) {
     const warn = document.createElement('div');
@@ -253,6 +273,60 @@ async function renderDoctor() {
     line.append(k, v);
     out.appendChild(line);
   }
+
+  renderCensus(lastDoctor.census, out);
+}
+
+/**
+ * What's actually on the page, regardless of whether our selectors found it.
+ * A miss plus an empty census means the content isn't there; a miss plus a
+ * populated census means the selector is wrong.
+ */
+function renderCensus(c, out) {
+  if (!c) return;
+
+  const h = document.createElement('div');
+  h.style.cssText = 'margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-weight:700';
+  h.textContent = 'What was on the page';
+  out.appendChild(h);
+
+  const line = (label, value, mono) => {
+    const d = document.createElement('div');
+    d.className = 'dline';
+    const k = document.createElement('span');
+    k.className = 'dkey';
+    k.textContent = label;
+    const v = document.createElement('span');
+    v.className = (mono ? 'mono ' : '') + 'grow';
+    v.style.whiteSpace = 'pre-wrap';
+    v.style.overflowWrap = 'anywhere';
+    v.textContent = value;
+    d.append(k, v);
+    out.appendChild(d);
+  };
+
+  line('posts loaded', String(c.posts));
+  line('long posts (400+)', String(c.longPosts));
+  line('with a card', String(c.withCard));
+  line('"Show this thread"', String(c.withThreadHint));
+  line('longest texts', (c.longestTexts || []).join(', ') || '—');
+  line('article-ish testids',
+    (c.articleish || []).length ? c.articleish.join(', ') : 'none found', true);
+  line('outbound links',
+    (c.outbound || []).length ? c.outbound.join('\n') : 'none', true);
+
+  const lh = document.createElement('div');
+  lh.className = 'dline';
+  lh.style.marginTop = '6px';
+  const lk = document.createElement('span');
+  lk.className = 'dkey';
+  lk.textContent = 'link shapes';
+  const lv = document.createElement('span');
+  lv.className = 'mono grow';
+  lv.style.whiteSpace = 'pre-wrap';
+  lv.textContent = (c.linkShapes || []).map((x) => `${String(x.n).padStart(3)}×  ${x.shape}`).join('\n') || '—';
+  lh.append(lk, lv);
+  out.appendChild(lh);
 }
 
 /* ------------------------------------------------------------------ */
