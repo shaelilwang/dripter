@@ -77,6 +77,45 @@
     return n;
   }
 
+  /* ---------------------------------------------------------------- */
+  /* "Show more" clamping                                              */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Reveal "Show more" only when the text is actually being cut off.
+   *
+   * Whether it overflows depends on wrapped height, which isn't known until
+   * the card is in the document and laid out. A one-shot requestAnimationFrame
+   * after render was unreliable — it can land while the node is still
+   * detached, measure 0 against 0, and hide the control on a card that really
+   * is clamped. A ResizeObserver fires when the element first gets a size and
+   * again on every reflow, so the answer stays correct.
+   */
+  let clampObserver = null;
+
+  function updateClamp(card) {
+    if (!card) return;
+    const textEl = card.querySelector('.ad-text');
+    const moreEl = card.querySelector('.ad-more');
+    if (!textEl || !moreEl) return;
+
+    if (card.classList.contains('is-empty')) { moreEl.style.display = 'none'; return; }
+    if (card.classList.contains('is-expanded')) { moreEl.style.display = ''; return; }
+
+    const clamped = textEl.scrollHeight > textEl.clientHeight + 2;
+    moreEl.style.display = clamped ? '' : 'none';
+  }
+
+  function watchClamp(textEl) {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (!clampObserver) {
+      clampObserver = new ResizeObserver((entries) => {
+        for (const e of entries) updateClamp(e.target.closest('.ad-card'));
+      });
+    }
+    clampObserver.observe(textEl);
+  }
+
   function build() {
     const card = el('div', 'ad-card');
     card.setAttribute('data-ad-card', '1');
@@ -97,7 +136,15 @@
     head.appendChild(el('span', 'ad-badge'));
     body.appendChild(head);
 
-    body.appendChild(el('div', 'ad-text'));
+    body.appendChild(el('div', 'ad-heading'));
+    const textEl = el('div', 'ad-text');
+    body.appendChild(textEl);
+    watchClamp(textEl);
+
+    const more = el('button', 'ad-more', 'Show more');
+    more.type = 'button';
+    more.setAttribute('data-ad-act', 'more');
+    body.appendChild(more);
 
     const foot = el('div', 'ad-foot');
     const prog = el('div', 'ad-progress');
@@ -139,6 +186,18 @@
     const textEl = card.querySelector('.ad-text');
     textEl.textContent = p.snippet ? p.snippet.text : '';
     textEl.classList.toggle('is-heading', !!(p.snippet && p.snippet.kind === 'heading'));
+
+    // Section heading rides above the prose it belongs to.
+    const headEl = card.querySelector('.ad-heading');
+    const sectionHeading = p.snippet && p.snippet.heading;
+    headEl.textContent = sectionHeading || '';
+    headEl.style.display = sectionHeading ? '' : 'none';
+
+    // Long snippets clamp behind "Show more", the way X truncates its own
+    // long posts.
+    card.classList.remove('is-expanded');
+    card.querySelector('.ad-more').textContent = 'Show more';
+    updateClamp(card);
 
     const title = p.title || 'Untitled';
     card.querySelector('.ad-title').textContent = title;
@@ -241,6 +300,13 @@
     const id = card.dataset.adItem;
     const act = btn.getAttribute('data-ad-act');
 
+    if (act === 'more') {
+      const expanded = card.classList.toggle('is-expanded');
+      btn.textContent = expanded ? 'Show less' : 'Show more';
+      updateClamp(card);
+      return;
+    }
+
     if (act === 'open') {
       const item = id ? await store.getItem(id) : null;
       if (item) window.open(item.url || item.statusUrl, '_blank', 'noopener');
@@ -301,6 +367,6 @@
 
   root.AD.card = {
     create, render, applyTheme, startDwellTracking, track,
-    takeNext, releaseAll, EMPTY,
+    takeNext, releaseAll, updateClamp, EMPTY,
   };
 })(globalThis);

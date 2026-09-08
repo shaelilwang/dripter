@@ -437,6 +437,45 @@
       soup.remove();
     }
 
+    section('card rendering');
+    {
+      await fresh(12, 0, { everyNPosts: 3 });
+      await store.upsertItem({ id: 'CR', url: 'u', kind: 'article',
+        title: 'A Article', author: { name: 'A', handle: 'a' } });
+      // Comfortably past the 12-line clamp at any plausible column width.
+      const longRun = 'This section runs on at length so the card has to clamp it. '.repeat(30);
+      await store.setSnippets('CR', [
+        { text: 'Short body under a heading.', kind: 'para', heading: 'Section One' },
+        { text: longRun, kind: 'para', heading: 'Section Two' },
+        { text: 'No heading on this one.', kind: 'para', heading: null },
+      ]);
+      inject._resetLayout(); AD.card.releaseAll();
+      await inject.sweep();
+      await new Promise((r) => setTimeout(r, 250));
+
+      const cs = cards();
+      check('renders the section heading above the body',
+        cs[0].querySelector('.ad-heading').textContent === 'Section One',
+        JSON.stringify(cs[0].querySelector('.ad-heading').textContent));
+      check('a short card offers no Show more',
+        cs[0].querySelector('.ad-more').style.display === 'none');
+      check('a long card does',
+        cs[1].querySelector('.ad-more').style.display !== 'none');
+
+      const long = cs[1];
+      long.querySelector('[data-ad-act="more"]').click();
+      check('expanding lifts the clamp', long.classList.contains('is-expanded'));
+      check('and the control flips to Show less',
+        long.querySelector('.ad-more').textContent === 'Show less');
+      long.querySelector('[data-ad-act="more"]').click();
+      check('collapsing puts it back', !long.classList.contains('is-expanded'));
+
+      check('enough cards were placed to cover all three snippets',
+        cs.length >= 3, `only ${cs.length}`);
+      check('a snippet with no heading hides the heading row',
+        cs[2] && cs[2].querySelector('.ad-heading').style.display === 'none');
+    }
+
     section('incremental re-harvest');
     {
       // A second harvest over unchanged bookmarks must stop scrolling instead
@@ -454,6 +493,22 @@
       };
 
       await store.setSettings({ incrementalHarvest: true });
+
+      // Build and harvest a bookmarks list of our own rather than inheriting
+      // whatever the previous section left in the feed — those posts have no
+      // permalinks, so nothing would be recognisable on the second pass.
+      __resetStorage();
+      feed.innerHTML = '';
+      const btl = document.createElement('div');
+      btl.setAttribute('aria-label', 'Timeline: Bookmarks');
+      for (let i = 0; i < 5; i++) {
+        btl.appendChild(fakeBookmark({
+          handle: 'someone', id: '90' + i,
+          text: 'A bookmarked post with plenty of body text to be worth keeping. '.repeat(8),
+        }));
+      }
+      feed.appendChild(btl);
+      await AD.collect.harvestVisible(await store.getSettings());
 
       // Case 1: fresh page load — adSeen marks are gone, so every post is
       // re-read and recognised as already known.

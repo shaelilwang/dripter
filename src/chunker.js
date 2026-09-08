@@ -22,9 +22,24 @@
   root.AD = root.AD || {};
 
   const DEFAULTS = {
-    maxChars: 270,   // leaves headroom under 280 for the ellipsis marks
+    /*
+     * Cards are sized by STRUCTURE, not by a character budget.
+     *
+     * The unit is whatever the author already made a unit: a section runs
+     * from one heading to the next, and a thread post is a post. A card
+     * carries the whole thing, however long that happens to be, and the card
+     * itself clamps the overflow behind "Show more" the way X does with its
+     * own long posts.
+     *
+     * maxChars is only a safety valve for a pathologically long run, and it
+     * splits at paragraph boundaries first. Set it to 0 for no cap at all.
+     * Chasing a target length is what turned one thread into 264 cards
+     * showing a single bullet each.
+     */
+    maxChars: 2500,
     minChars: 40,    // below this a trailing chunk is a "runt" worth merging
     mergeRunts: true,
+    groupBySection: true,
   };
 
   // Words that end in a period and essentially never end a sentence.
@@ -249,6 +264,95 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* section packing                                                     */
+  /* ------------------------------------------------------------------ */
+
+  const isBullet = (s) => /^[•\-*–—]\s|^\d+[.)]\s/.test(String(s).trimStart());
+
+  /**
+   * Bullets in a run belong tight together; prose paragraphs get air.
+   *
+   * Tests the LAST LINE of what's accumulated so far, not its start. A
+   * section that opens with prose and then lists bullets would otherwise
+   * compare against the opening sentence every time and space every bullet
+   * out with a blank line.
+   */
+  function joinerFor(soFar, next) {
+    const lines = String(soFar).split('\n');
+    return isBullet(lines[lines.length - 1]) && isBullet(next) ? '\n' : '\n\n';
+  }
+
+  /**
+   * Turn a section's paragraphs into cards.
+   *
+   * Default behaviour is to keep the whole section together — the author's
+   * own boundary is the right one. The cap only intervenes for a runaway
+   * section, and even then it breaks between paragraphs; a sentence-level
+   * split happens only when one paragraph alone exceeds the cap.
+   *
+   * A paragraph marked `atomic` is never merged with its neighbours. Thread
+   * posts use that: a post is already a unit and shouldn't be glued to the
+   * next one or torn apart.
+   */
+  function packSection(paras, opts) {
+    const cap = opts.maxChars > 0 ? opts.maxChars : Infinity;
+    const out = [];
+    let cur = '';
+    const flush = () => { if (cur) { out.push(cur); cur = ''; } };
+
+    for (const para of paras) {
+      const text = para.text;
+
+      if (para.atomic) {
+        flush();
+        if (text.length <= cap) out.push(text);
+        else for (const piece of packParagraph(text, { ...opts, maxChars: cap })) out.push(piece);
+        continue;
+      }
+
+      if (text.length > cap) {
+        flush();
+        for (const piece of packParagraph(text, { ...opts, maxChars: cap })) out.push(piece);
+        continue;
+      }
+
+      const candidate = cur ? cur + joinerFor(cur, text) + text : text;
+      if (candidate.length <= cap) cur = candidate;
+      else { flush(); cur = text; }
+    }
+
+    flush();
+    return out;
+  }
+
+  /** Split blocks into { heading, paras } runs, one per heading. */
+  function toSections(blocks, opts, trustHeuristic) {
+    const sections = [];
+    let cur = { heading: null, paras: [] };
+    const flush = () => {
+      if (cur.heading || cur.paras.length) sections.push(cur);
+      cur = { heading: null, paras: [] };
+    };
+
+    for (const block of blocks) {
+      const text = normalize(block && block.text);
+      if (!text) continue;
+
+      const isHeading = block.type === 'heading' ||
+        (block.type !== 'para' && trustHeuristic && looksLikeHeading(text));
+
+      if (isHeading && text.length <= 120) {
+        flush();
+        cur.heading = text;
+      } else {
+        cur.paras.push({ text, atomic: !!(block && block.atomic) });
+      }
+    }
+    flush();
+    return sections;
+  }
+
+  /* ------------------------------------------------------------------ */
   /* public API                                                          */
   /* ------------------------------------------------------------------ */
 
@@ -289,25 +393,49 @@
     const trustHeuristic =
       !(untyped.length >= 4 && headingish.length / untyped.length > 0.5);
 
-    blocks.forEach((block, bi) => {
-      const text = normalize(block && block.text);
-      if (!text) return;
-
-      const isHeading = block.type === 'heading' ||
-        (block.type !== 'para' && trustHeuristic && looksLikeHeading(text));
-
-      if (isHeading) {
-        // A heading longer than the budget is rare; treat it as prose.
-        if (text.length <= opts.maxChars) {
+    if (!opts.groupBySection) {
+      // One card per paragraph. Kept for callers that want the old shape.
+      blocks.forEach((block, bi) => {
+        const text = normalize(block && block.text);
+        if (!text) return;
+        const isHeading = block.type === 'heading' ||
+          (block.type !== 'para' && trustHeuristic && looksLikeHeading(text));
+        if (isHeading && text.length <= opts.maxChars) {
           snippets.push({ text, kind: 'heading', block: bi, i: i++ });
           return;
         }
+        for (const t of packParagraph(text, opts)) {
+          snippets.push({ text: t, kind: 'para', block: bi, i: i++ });
+        }
+      });
+      return snippets;
+    }
+
+    // A heading rides along with the prose underneath it rather than taking a
+    // card of its own — a card that is nothing but a heading tells you
+    // nothing, and you have to advance past it to reach the actual content.
+    for (const sec of toSections(blocks, opts, trustHeuristic)) {
+      const parts = packSection(sec.paras, opts);
+
+      if (!parts.length) {
+        if (sec.heading) {
+          snippets.push({ text: sec.heading, kind: 'heading', heading: null, i: i++ });
+        }
+        continue;
       }
 
-      for (const t of packParagraph(text, opts)) {
-        snippets.push({ text: t, kind: 'para', block: bi, i: i++ });
-      }
-    });
+      parts.forEach((text, k) => {
+        snippets.push({
+          text,
+          kind: 'para',
+          // Continuation cards keep the heading for context, marked so it's
+          // clear you're still inside the same section.
+          heading: !sec.heading ? null
+            : (k === 0 ? sec.heading : sec.heading + ' (cont.)'),
+          i: i++,
+        });
+      });
+    }
 
     return snippets;
   }

@@ -17,8 +17,10 @@ browser against the session you're already logged into.
 2. **Fetch** — opens each one in a background window, which is where the
    Article body actually lives, and works out what it really is: Article,
    thread, long post, or not worth dripping.
-3. **Chunk** — splits that text into ~270-character snippets offline, breaking
-   on sentence and paragraph boundaries rather than mid-thought.
+3. **Chunk** — splits it by *structure*, not by length: one card per section
+   for an article, one card per post for a thread. Each card carries its
+   section heading and as much prose as the section holds; the card clamps
+   overflow behind "Show more", the way X truncates its own long posts.
 4. **Drip** — as you scroll `/home`, inserts a snippet card after every Nth
    real post. Each card tracks where you are (`12 / 47`) and remembers.
 
@@ -61,7 +63,7 @@ and the on/off switch.
 | Setting | Default | What it does |
 |---|---|---|
 | Insert a snippet every | 4 posts | Card density in the feed |
-| Snippet length | 270 chars | Applies to newly fetched articles |
+| Maximum card length | 2500 chars | Safety cap only — cards are sized by section. 0 for no cap. |
 | Order | Sequential | Finish one article before starting the next |
 | Count as read after | 900 ms | Dwell time before a card auto-advances |
 | Minimum thread length | 3 posts | Shorter self-threads get skipped |
@@ -79,6 +81,7 @@ select `reading` and "Mark read" retires only those:
 | Mark all read | Retires them so they stop appearing in your feed. Nothing is deleted. |
 | Retry failed | Puts failed extractions back in the queue for the next fetch. |
 | Remove finished | Drops finished articles from the library entirely. |
+| Re-chunk everything | Re-splits already-fetched articles with the current settings. No re-fetching — the extracted text is kept, and reading position carries across. |
 
 ### Nothing gets re-done
 

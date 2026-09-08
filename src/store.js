@@ -30,7 +30,7 @@
   const DEFAULT_SETTINGS = {
     enabled: true,
     everyNPosts: 4,        // insert a card after every N real posts
-    maxChars: 270,         // snippet budget
+    maxChars: 2500,        // safety cap only; 0 = no cap. Sections are the unit.
     order: 'sequential',   // 'sequential' | 'roundRobin' | 'shuffle'
     autoAdvance: false,    // tapping Next loads the following snippet in place
     markReadOnView: true,  // count a snippet read once it's been on screen
@@ -162,7 +162,11 @@
   async function setSnippets(id, snippets) {
     const clean = (snippets || []).filter((s) => s && s.text && s.text.trim());
     return updateItem(id, {
-      snippets: clean.map((s) => ({ text: s.text, kind: s.kind || 'para' })),
+      snippets: clean.map((s) => ({
+        text: s.text,
+        kind: s.kind || 'para',
+        heading: s.heading || null,
+      })),
       cursor: 0,
       state: clean.length ? 'ready' : 'failed',
       fetchedAt: Date.now(),
@@ -234,6 +238,48 @@
   }
   async function markDone(id) {
     return updateItem(id, { state: 'done' });
+  }
+
+  /**
+   * Re-run the chunker over blocks we already extracted.
+   *
+   * Snippet boundaries are a presentation choice, so changing them shouldn't
+   * mean re-opening every article. Reading position is carried across as a
+   * fraction, since the old snippet index means nothing once the count moves.
+   */
+  async function rechunkAll() {
+    const chunker = root.AD && root.AD.chunker;
+    if (!chunker) throw new Error('chunker not loaded');
+
+    const settings = await getSettings();
+    const items = await getItems();
+    let done = 0;
+    let skipped = 0;
+
+    for (const it of Object.values(items)) {
+      if (!it.blocks || !it.blocks.length) { skipped++; continue; }
+
+      const snippets = chunker.chunk(it.blocks, { maxChars: settings.maxChars });
+      if (!snippets.length) { skipped++; continue; }
+
+      const oldTotal = (it.snippets || []).length;
+      const progress = oldTotal ? (it.cursor || 0) / oldTotal : 0;
+      const cursor = Math.min(snippets.length, Math.round(progress * snippets.length));
+
+      items[it.id] = Object.assign({}, it, {
+        snippets: snippets.map((s) => ({
+          text: s.text, kind: s.kind || 'para', heading: s.heading || null,
+        })),
+        cursor,
+        state: it.state === 'done' ? 'done'
+          : cursor >= snippets.length ? 'done'
+          : cursor > 0 ? 'reading' : 'ready',
+      });
+      done++;
+    }
+
+    await set({ items });
+    return { done, skipped };
   }
 
   /* ---- bulk operations: one read, one write, whatever the size ---- */
@@ -333,7 +379,7 @@
     getStats, bumpStats,
     getItems, getItem, upsertItem, upsertMany, updateItem, removeItem,
     setSnippets, peekNext, consume, resetItem, markDone,
-    markManyDone, retryFailed, removeMany,
+    markManyDone, retryFailed, removeMany, rechunkAll,
     counts, exportAll, importAll,
   };
 

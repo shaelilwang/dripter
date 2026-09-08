@@ -187,10 +187,18 @@
         .replace(/(^|\s)\d{1,2}\s*\/\s*\d{0,2}(?=\s|$)/g, ' ')
         .replace(/🧵/g, '')
         .trim();
-      for (const para of cleaned.split(/\n+/)) {
-        const t = para.trim();
-        if (t) blocks.push({ type: undefined, text: t });
-      }
+      if (!cleaned) continue;
+
+      // One block per POST, newlines and all.
+      //
+      // Splitting each post into its own lines is what produced a 264-card
+      // thread showing one bullet at a time: a post with a ten-item list
+      // became ten cards. The author already chose the unit — keep it.
+      //
+      // 'para' suppresses heading detection (a short post like "1. Get a
+      // microcontroller" would otherwise read as a heading) and 'atomic'
+      // stops posts being glued to each other.
+      blocks.push({ type: 'para', atomic: true, text: cleaned });
     }
 
     return { title: null, blocks, source: 'thread', postCount: parts.length };
@@ -254,6 +262,9 @@
     await store.updateItem(item.id, {
       kind,
       title: result.title || item.title,
+      // Keep the extracted blocks. Re-chunking after a settings change then
+      // costs nothing, instead of re-opening every article in a browser tab.
+      blocks: result.blocks,
       debug: {
         via: result.via || result.source,
         blocks: result.blocks.length,

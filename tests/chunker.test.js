@@ -66,17 +66,99 @@ eq('month name as a word still breaks',
   C.splitSentences('The deadline slipped to Aug. Everyone groaned.'),
   ['The deadline slipped to Aug.', 'Everyone groaned.']);
 
-console.log('\nblock handling');
+console.log('\nsection model');
 {
+  // Cards are sized by structure: a section is one card, and its heading
+  // rides along with the prose rather than taking a card of its own.
   const out = C.chunk([
     { type: 'heading', text: 'Why this matters' },
     { type: 'para', text: 'Short paragraph one.' },
     { type: 'para', text: 'Short paragraph two.' },
   ]);
-  eq('paragraphs never merge across blocks',
-    out.map((s) => s.text),
-    ['Why this matters', 'Short paragraph one.', 'Short paragraph two.']);
-  eq('heading is tagged', out[0].kind, 'heading');
+  eq('a section becomes one card', out.length, 1);
+  eq('paragraphs are joined, not split apart',
+    out[0].text, 'Short paragraph one.\n\nShort paragraph two.');
+  eq('the heading rides along', out[0].heading, 'Why this matters');
+  eq('and is not duplicated into the body', out[0].text.includes('Why this matters'), false);
+}
+{
+  const out = C.chunk([
+    { type: 'heading', text: 'First' },
+    { type: 'para', text: 'Alpha.' },
+    { type: 'heading', text: 'Second' },
+    { type: 'para', text: 'Beta.' },
+  ]);
+  eq('each heading starts a new card', out.length, 2);
+  eq('first card belongs to the first section', out[0].heading, 'First');
+  eq('second to the second', out[1].heading, 'Second');
+  eq('bodies stay with their own section',
+    out.map((s) => s.text), ['Alpha.', 'Beta.']);
+}
+{
+  // A section that overruns the cap continues onto another card, and the
+  // continuation says so rather than looking like a new section.
+  const para = 'A sentence that runs on for a while and carries real weight. ';
+  const out = C.chunk([
+    { type: 'heading', text: 'Long One' },
+    { type: 'para', text: para.repeat(4) },
+    { type: 'para', text: para.repeat(4) },
+  ], { maxChars: 300 });
+  check('splits onto multiple cards', out.length > 1, `got ${out.length}`);
+  eq('first card carries the plain heading', out[0].heading, 'Long One');
+  check('later cards are marked as continuations',
+    out.slice(1).every((s) => s.heading === 'Long One (cont.)'),
+    JSON.stringify(out.map((s) => s.heading)));
+}
+{
+  // Thread posts are atomic: a post is already the author's unit, so it is
+  // never glued to the next one nor shredded into its own lines. This is the
+  // 264-cards-of-one-bullet regression.
+  const post = (n) => ({
+    type: 'para', atomic: true,
+    text: `Post ${n} opener:\n• first bullet\n• second bullet\n• third bullet`,
+  });
+  const out = C.chunk([post(1), post(2), post(3)]);
+  eq('one card per post, not per line', out.length, 3);
+  check('each post keeps its bullets together',
+    out.every((s) => s.text.split('\n').length === 4),
+    JSON.stringify(out.map((s) => s.text.split('\n').length)));
+  check('posts are not merged with each other',
+    out.every((s) => (s.text.match(/Post \d opener/g) || []).length === 1));
+  check('a short numbered post is not mistaken for a heading',
+    C.chunk([{ type: 'para', atomic: true, text: '1. Get a microcontroller' }])[0].kind === 'para');
+}
+{
+  const long = 'Words and more words. '.repeat(400); // ~8800 chars
+  eq('cap 0 means no cap at all', C.chunk([{ type: 'para', text: long }], { maxChars: 0 }).length, 1);
+  check('a cap still applies when set',
+    C.chunk([{ type: 'para', text: long }], { maxChars: 500 }).length > 5);
+}
+{
+  // Bullet runs pack tight; prose paragraphs get a blank line between them.
+  const bullets = C.chunk([
+    { type: 'para', text: '• one' },
+    { type: 'para', text: '• two' },
+  ]);
+  eq('bullets join on a single newline', bullets[0].text, '• one\n• two');
+
+  // The realistic shape: a lead-in sentence, then a list. The run has to stay
+  // tight even though the section starts with prose.
+  const mixed = C.chunk([
+    { type: 'para', text: 'Ask for the reasoning first, and grade that.' },
+    { type: 'para', text: '• Require the intermediate steps' },
+    { type: 'para', text: '• Score the approach separately' },
+    { type: 'para', text: '• Reward calibrated uncertainty' },
+  ]);
+  eq('prose then bullets keeps the list tight',
+    mixed[0].text,
+    'Ask for the reasoning first, and grade that.\n' +
+    '\n• Require the intermediate steps' +
+    '\n• Score the approach separately' +
+    '\n• Reward calibrated uncertainty');
+
+  eq('numbered lists count as bullets too',
+    C.chunk([{ type: 'para', text: '1. First' }, { type: 'para', text: '2. Second' }])[0].text,
+    '1. First\n2. Second');
 }
 
 console.log('\nheading runaway guard');
@@ -95,7 +177,9 @@ console.log('\nheading runaway guard');
   const headings = out.filter((s) => s.kind === 'heading').length;
   check('stops trusting the heuristic when most blocks look like headings',
     headings === 0, `${headings} of ${out.length} came back as headings`);
-  eq('every fragment is still kept', out.length, 5);
+  const all = out.map((s) => s.text).join('\n');
+  check('every fragment is still kept',
+    fragments.every((f) => all.includes(f.text)), JSON.stringify(all));
 }
 {
   // A genuine article: one heading among real prose. The heuristic should
@@ -107,8 +191,11 @@ console.log('\nheading runaway guard');
     { text: 'Nobody wants to talk about the scheduler incident anymore, for reasons that are entirely fair.' },
   ];
   const out = C.chunk(blocks);
-  eq('a lone heading among prose is still detected', out[0].kind, 'heading');
-  check('the prose is not', out.slice(1).every((s) => s.kind === 'para'));
+  eq('a lone heading among prose is still detected', out[0].heading, 'Why This Matters');
+  check('the prose is carried as body, not as a heading card',
+    out.every((s) => s.kind === 'para'));
+  check('the heading is not repeated in the body',
+    !out[0].text.startsWith('Why This Matters'), out[0].text.slice(0, 40));
 }
 {
   // Explicit types from the extractor always win over the guard.
@@ -131,7 +218,7 @@ console.log('\npacking');
 {
   const sentences = [];
   for (let i = 0; i < 12; i++) sentences.push(`Sentence number ${i} is here.`);
-  const out = C.chunk([{ type: 'para', text: sentences.join(' ') }]);
+  const out = C.chunk([{ type: 'para', text: sentences.join(' ') }], { maxChars: 270 });
   check('multiple sentences pack into few chunks', out.length >= 2 && out.length <= 5,
     `got ${out.length} chunks`);
   check('every chunk within budget', out.every((s) => s.text.length <= 270),
@@ -153,7 +240,7 @@ console.log('\noversized sentences');
     'incident involving the scheduler that nobody wants to talk about anymore.';
   check('input really is oversized', long.length > 270, `len ${long.length}`);
 
-  const out = C.chunk([{ type: 'para', text: long }]);
+  const out = C.chunk([{ type: 'para', text: long }], { maxChars: 270 });
   check('splits into multiple chunks', out.length > 1, `got ${out.length}`);
   check('every chunk within budget', out.every((s) => s.text.length <= 270),
     `max was ${Math.max(...out.map((s) => s.text.length))}`);
@@ -172,7 +259,7 @@ console.log('\noversized sentences');
 console.log('\nno-space edge case');
 {
   const wall = 'x'.repeat(600);
-  const out = C.chunk([{ type: 'para', text: wall }]);
+  const out = C.chunk([{ type: 'para', text: wall }], { maxChars: 270 });
   check('handles a single unbroken token', out.length > 1, `got ${out.length}`);
   check('still respects budget', out.every((s) => s.text.length <= 270),
     `max was ${Math.max(...out.map((s) => s.text.length))}`);
@@ -184,7 +271,7 @@ console.log('\nnormalization');
   const out = C.chunk(messy);
   eq('strips zero-width and collapses space',
     out.map((s) => s.text),
-    ['Hello there friend.', 'Next para.']);
+    ['Hello there friend.\n\nNext para.']);
 }
 
 console.log('\nrunt merging');

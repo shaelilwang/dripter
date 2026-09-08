@@ -189,6 +189,17 @@ $('bulk-retry').addEventListener('click', async () => {
   renderLibrary();
 });
 
+$('rechunk').addEventListener('click', async () => {
+  try {
+    const { done, skipped } = await store.rechunkAll();
+    say(`Re-chunked ${done} article${done === 1 ? '' : 's'} with the current settings.` +
+        (skipped ? ` ${skipped} had no stored text — re-fetch those.` : ''), 'ok');
+    renderLibrary();
+  } catch (e) {
+    say(String(e.message || e), 'err');
+  }
+});
+
 $('bulk-remove').addEventListener('click', async () => {
   if (!confirm('Remove finished articles from the library? They can be harvested again later.')) return;
   say(`Removed ${await store.removeMany('done')}.`, 'ok');

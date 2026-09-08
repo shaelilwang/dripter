@@ -103,6 +103,25 @@ of the untyped blocks look like headings, it treats them all as prose --
 that ratio means the extractor handed over fragments, not a structured
 document. Explicitly typed blocks always win.
 
+**Cards are sized by structure, not by a character budget.** A section (one
+heading to the next) is one card; a thread post is one card. `maxChars` is a
+safety valve that splits between paragraphs, and 0 disables it. Targeting a
+length is what turned a single thread into 264 cards showing one bullet each.
+Thread blocks carry `atomic: true` so they are neither merged with their
+neighbours nor shredded into their own lines, and `type: 'para'` so a short
+post like "1. Get a microcontroller" isn't read as a heading.
+
+**Headings ride on their section's first card** as `snippet.heading`, rather
+than getting a card of their own — a card that is only a heading tells the
+reader nothing and has to be advanced past. Continuations get "(cont.)".
+
+**`joinerFor` tests the last line of the accumulated text, not its start.**
+A section that opens with prose then lists bullets would otherwise compare
+each bullet against the opening sentence and space the whole list out.
+
+**Extracted blocks are stored on the item** so `rechunkAll()` can re-split
+after a settings change without re-opening every article in a browser tab.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or

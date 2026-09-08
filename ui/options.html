@@ -35,9 +35,12 @@
     </label>
 
     <label class="field">
-      <span class="lbl">Snippet length</span>
-      <span class="hint">Character budget per card. Changing this re-chunks new fetches only.</span>
-      <input type="number" id="maxChars" min="80" max="1000" step="10"> characters
+      <span class="lbl">Maximum card length</span>
+      <span class="lbl" style="display:none"></span>
+      <span class="hint">Cards are sized by structure — one per section, or per
+        post in a thread — so this is only a safety cap for a runaway section.
+        It splits between paragraphs first. Set 0 for no cap.</span>
+      <input type="number" id="maxChars" min="0" max="20000" step="100"> characters
     </label>
 
     <label class="field">
@@ -105,6 +108,7 @@
     <button id="bulk-done" class="tiny">Mark all read</button>
     <button id="bulk-retry" class="tiny">Retry failed</button>
     <button id="bulk-remove" class="tiny danger">Remove finished</button>
+    <button id="rechunk" class="tiny">Re-chunk everything</button>
     <span class="small muted" id="bulk-hint"></span>
   </div>
   <div class="items" id="items"></div>
@@ -128,6 +132,7 @@
     <button id="wipe" class="danger">Delete everything</button>
   </div>
 
+  <script src="../src/chunker.js"></script>
   <script src="../src/store.js"></script>
   <script src="options.js"></script>
 </body>
