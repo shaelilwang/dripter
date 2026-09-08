@@ -136,6 +136,26 @@ that polls, observes, or touches chrome.* on a timer must register with
 an orphaned tab. Register at module load, not inside start() — teardown can
 happen before startup finishes.
 
+**Semantic markup is only trusted when it carries the text.** X emits headings
+as real `<h2>` but body paragraphs as plain `<div>`. The old
+`semantic.length >= 3` test was satisfied by the headings alone, so the
+semantic branch won and every div of prose was discarded — articles arrived as
+nothing but headings. `blocksFromArticle` now requires the semantic elements to
+account for >=60% of `bodyEl.innerText` before trusting them, and otherwise
+falls back to innerText while recovering headings by matching against the
+`<h1>-<h6>` text. `assessBlocks()` reports coverage and heading ratio, and
+`extractInto` refuses an extraction that is >80% headings or <40% coverage.
+
+**Cards per article is capped by merging sections, never by cutting text.**
+`groupSections()` moves boundaries only, balanced by length with a one-step
+lookahead (closing the moment a group reaches its share starves the tail:
+twelve equal sections came out 3,3,3,2,1). `maxChars` defaults to 0 and should
+stay there — above 0 it re-enables sentence splitting, which inserts ellipses
+and alters the text.
+
+**Harvest reads `/i/history` as well as `/i/bookmarks`.** Same markup, and it
+is where the user actually browses.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or

@@ -421,6 +421,52 @@
       check('bullets are marked', sb.some((b) => b.text.startsWith('•')));
       check('quotes are marked', sb.some((b) => b.text.startsWith('\u201c')));
 
+      // THE regression: X emits headings as real <h2> but body paragraphs as
+      // plain <div>. Three-plus semantic elements were satisfied by the
+      // headings alone, so the semantic branch won and every div of prose was
+      // discarded — five headings in, five heading-only cards out.
+      const mixedMarkup = document.createElement('div');
+      mixedMarkup.innerHTML =
+        '<h2>Stage One: Getting Started</h2>' +
+        '<div>Real prose that lives in a plain div and must not be lost. ' +
+        'It carries the actual substance of the section.</div>' +
+        '<h2>Stage Two: Scaling Up</h2>' +
+        '<div>More prose in another div, equally at risk of being dropped ' +
+        'on the floor by a selector that only understands paragraphs.</div>' +
+        '<h2>Stage Three: Enterprise Adoption</h2>' +
+        '<div>Closing prose that rounds the whole thing out nicely.</div>';
+      document.body.appendChild(mixedMarkup);
+
+      const mm = blocksFromArticle(mixedMarkup);
+      const mmHeadings = mm.filter((b) => b.type === 'heading').length;
+      check('div prose is not discarded when headings are semantic',
+        mm.length > mmHeadings, JSON.stringify(mm.map((b) => b.type)));
+      check('the prose actually made it through',
+        mm.some((b) => b.text.includes('carries the actual substance')));
+      check('headings are still recognised as headings',
+        mmHeadings === 3, String(mmHeadings));
+
+      const mmQ = AD.extract.assessBlocks(mm, mixedMarkup);
+      check('quality check sees good coverage', mmQ.coverage > 0.9,
+        String(mmQ.coverage));
+      check('and a sane heading ratio', mmQ.headingRatio < 0.6,
+        String(mmQ.headingRatio));
+
+      const mmCards = AD.chunker.chunk(mm, { maxCards: 5 });
+      check('cards carry body text, not just headings',
+        mmCards.every((c) => c.text && c.text.length > 40),
+        JSON.stringify(mmCards.map((c) => c.text.length)));
+      mixedMarkup.remove();
+
+      // A genuinely heading-only extraction must be caught, not shipped.
+      const headOnly = document.createElement('div');
+      headOnly.innerHTML = '<h2>Alpha</h2><h2>Beta</h2><h2>Gamma</h2><h2>Delta</h2>';
+      document.body.appendChild(headOnly);
+      const hq = AD.extract.assessBlocks(blocksFromArticle(headOnly), headOnly);
+      check('an all-headings grab is flagged by the quality check',
+        hq.headingRatio > 0.8, String(hq.headingRatio));
+      headOnly.remove();
+
       // Nested-div rich text: the case that produced all-headings cards.
       const soup = document.createElement('div');
       soup.innerHTML = '<div><div><span>Most evaluation regimes reward the answer ' +
@@ -592,7 +638,11 @@
         cards().length === before);
       check('teardown is idempotent', (life.teardown('again'), true));
 
-      chrome.runtime.id = 'harness';            // restore for anything later
+      // Teardown is one-shot by design, so put the world back explicitly or
+      // nothing after this point in the page can run.
+      chrome.runtime.id = 'harness';
+      life._reset();
+      check('the harness can carry on after a simulated teardown', life.isAlive());
     }
 
     /* ---------------------------------------------------------------- */

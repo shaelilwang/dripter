@@ -17,10 +17,11 @@ browser against the session you're already logged into.
 2. **Fetch** — opens each one in a background window, which is where the
    Article body actually lives, and works out what it really is: Article,
    thread, long post, or not worth dripping.
-3. **Chunk** — splits it by *structure*, not by length: one card per section
-   for an article, one card per post for a thread. Each card carries its
-   section heading and as much prose as the section holds; the card clamps
-   overflow behind "Show more", the way X truncates its own long posts.
+3. **Chunk** — splits it by *structure*, never by length. Sections (heading to
+   heading) and thread posts are the units, and adjacent ones are merged until
+   an article fits in at most 5 cards. Only the boundaries move: no text is cut,
+   trimmed or reworded, so what you read is verbatim. Cards clamp overflow
+   behind "Show more", the way X truncates its own long posts.
 4. **Drip** — as you scroll `/home`, inserts a snippet card after every Nth
    real post. Each card tracks where you are (`12 / 47`) and remembers.
 
@@ -43,7 +44,8 @@ No build step, no dependencies.
 1. Open `chrome://extensions`
 2. Turn on **Developer mode** (top right)
 3. **Load unpacked** → select this folder
-4. Open [x.com/i/bookmarks](https://x.com/i/bookmarks)
+4. Open [x.com/i/bookmarks](https://x.com/i/bookmarks) — `x.com/i/history`
+   works too, and harvests the same way
 5. Click the extension icon → **Harvest bookmarks**
 6. Click **Fetch article bodies** — a second window opens unfocused and works
    through them. Leave it alone; it closes itself.
@@ -63,7 +65,8 @@ and the on/off switch.
 | Setting | Default | What it does |
 |---|---|---|
 | Insert a snippet every | 4 posts | Card density in the feed |
-| Maximum card length | 2500 chars | Safety cap only — cards are sized by section. 0 for no cap. |
+| Cards per article | 5 | An article becomes at most this many cards, merged at section boundaries |
+| Maximum card length | 0 (off) | Above 0, splits sentences to hit a length and inserts ellipses — changes what you read |
 | Order | Sequential | Finish one article before starting the next |
 | Count as read after | 900 ms | Dwell time before a card auto-advances |
 | Minimum thread length | 3 posts | Shorter self-threads get skipped |
@@ -149,8 +152,11 @@ Some `✕` marks are normal: `articleBody` only resolves on an Article page,
 - **Fetch keeps failing** — X was probably still rendering. Failed items are
   *not* retried automatically; the fetch job only looks at `pending`. Use
   **Retry failed** in the library to requeue them, then fetch again.
-- **Nothing harvested** — you have to be on `x.com/i/bookmarks` with the list
-  visible before clicking Harvest.
+- **Nothing harvested** — you have to be on `x.com/i/bookmarks` or
+  `x.com/i/history` with the list visible before clicking Harvest.
+- **An article shows only headings** — extraction now refuses these rather
+  than shipping them, so it lands in the library as `failed` with the reason.
+  Check the per-item line: it reports coverage and heading ratio.
 - **Harvest stops early** — keep the tab in the foreground while it scrolls.
 - **Cards fade out and say "reload tab to resume"** — you reloaded the
   extension while that x.com tab was open. Chrome doesn't reload content

@@ -77,5 +77,9 @@
   root.AD.life = {
     isAlive, onTeardown, teardown, check, isContextError, guardedInterval,
     get dead() { return dead; },
+    // Test seam. Teardown is deliberately one-shot and irreversible in a real
+    // tab — the only honest recovery there is a reload. The harness needs to
+    // exercise it and then carry on, so it can undo the flag explicitly.
+    _reset: () => { dead = false; cleanups.length = 0; },
   };
 })(globalThis);

@@ -2,7 +2,7 @@
 const store = globalThis.AD.store;
 const $ = (id) => document.getElementById(id);
 
-const NUMBERS = ['everyNPosts', 'maxChars', 'dwellMs', 'minThreadPosts', 'minPostChars'];
+const NUMBERS = ['everyNPosts', 'maxCards', 'maxChars', 'dwellMs', 'minThreadPosts', 'minPostChars'];
 const FLAGS = ['markReadOnView', 'includeArticles', 'includeThreads', 'incrementalHarvest'];
 const SELECTS = ['order', 'fetchScope'];
 

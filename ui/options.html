@@ -35,11 +35,19 @@
     </label>
 
     <label class="field">
+      <span class="lbl">Cards per article</span>
+      <span class="hint">An article becomes at most this many cards. Sections
+        are merged at their own boundaries to fit — no text is ever cut or
+        reworded.</span>
+      <input type="number" id="maxCards" min="1" max="50" step="1"> cards
+    </label>
+
+    <label class="field">
       <span class="lbl">Maximum card length</span>
       <span class="lbl" style="display:none"></span>
-      <span class="hint">Cards are sized by structure — one per section, or per
-        post in a thread — so this is only a safety cap for a runaway section.
-        It splits between paragraphs first. Set 0 for no cap.</span>
+      <span class="hint">Leave at 0. Above 0 this splits sentences to hit a
+        length, inserting ellipses — which changes what you read. Cards per
+        article above is the setting you want.</span>
       <input type="number" id="maxChars" min="0" max="20000" step="100"> characters
     </label>
 

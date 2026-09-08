@@ -13,24 +13,44 @@
   /* native X Articles                                                 */
   /* ---------------------------------------------------------------- */
 
-  /** Walk the rendered Article body into ordered heading/para blocks. */
+  const tidy = (s) => (s || '').replace(/[ \t]+/g, ' ').trim();
+
+  /**
+   * Walk the rendered Article body into ordered heading/para blocks.
+   *
+   * The semantic path is only taken when the semantic elements actually
+   * account for most of the text. X emits headings as real <h2> but body
+   * paragraphs as plain <div>, so "three or more semantic elements" was
+   * satisfied by the headings alone — and every div of prose was thrown away.
+   * The reader got an article of nothing but headings.
+   *
+   * When coverage is poor we fall back to innerText, which respects rendered
+   * layout, and recover the heading structure by matching lines against the
+   * text of the real <h1>-<h6> elements.
+   */
   function blocksFromArticle(bodyEl) {
     const blocks = [];
     const push = (type, text) => {
-      const t = (text || '').replace(/[ \t]+/g, ' ').trim();
+      const t = tidy(text);
       if (t) blocks.push({ type, text: t });
     };
 
-    // Prefer real semantic elements when X emits them — the tag tells us
-    // outright what's a heading, with no guessing.
+    const fullText = (bodyEl.innerText || '').trim();
+    const totalChars = fullText.length;
+
     const semantic = Array.from(
       bodyEl.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,blockquote')
     ).filter((el) => !el.parentElement.closest('p,li,blockquote'));
 
-    if (semantic.length >= 3) {
+    const semanticChars = semantic
+      .reduce((n, el) => n + tidy(el.innerText).length, 0);
+
+    // Trust the markup only if it carries the article, not just its titles.
+    if (semantic.length >= 3 && totalChars > 0 &&
+        semanticChars >= totalChars * 0.6) {
       for (const el of semantic) {
         const tag = el.tagName.toLowerCase();
-        const text = (el.innerText || '').trim();
+        const text = tidy(el.innerText);
         if (!text) continue;
         if (/^h[1-6]$/.test(tag)) push('heading', text);
         else if (tag === 'li') push('para', '• ' + text);
@@ -40,13 +60,36 @@
       return blocks;
     }
 
-    // Otherwise X's nested-div rich text. Use innerText, NOT our own tree
-    // walk: richText() emits a newline after every DIV, and in deeply nested
-    // markup that shatters prose into one-fragment-per-div. innerText breaks
-    // where the browser actually renders a break, which is what we want.
-    const raw = bodyEl.innerText || '';
-    for (const para of raw.split(/\n+/)) push(undefined, para);
+    // Fall back to rendered text. richText() would emit a newline after every
+    // DIV and shatter prose into one fragment per div; innerText breaks where
+    // the browser actually breaks.
+    const headingTexts = new Set(
+      Array.from(bodyEl.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+        .map((el) => tidy(el.innerText))
+        .filter(Boolean)
+    );
+
+    for (const line of fullText.split(/\n+/)) {
+      const t = tidy(line);
+      if (!t) continue;
+      // Keep the heading structure the markup did give us.
+      push(headingTexts.has(t) ? 'heading' : 'para', t);
+    }
     return blocks;
+  }
+
+  /** Did we actually come away with the article, or just its furniture? */
+  function assessBlocks(blocks, bodyEl) {
+    const chars = blocks.reduce((n, b) => n + b.text.length, 0);
+    const headings = blocks.filter((b) => b.type === 'heading').length;
+    const pageChars = bodyEl ? (bodyEl.innerText || '').trim().length : 0;
+    return {
+      blocks: blocks.length,
+      chars,
+      headings,
+      headingRatio: blocks.length ? headings / blocks.length : 0,
+      coverage: pageChars ? Math.min(1, chars / pageChars) : null,
+    };
   }
 
   /**
@@ -116,7 +159,10 @@
 
     blocks = dropTitleEcho(blocks, title);
 
-    return { title, blocks, source: 'article', via };
+    return {
+      title, blocks, source: 'article', via,
+      quality: assessBlocks(blocks, bodyEl),
+    };
   }
 
   /**
@@ -239,6 +285,36 @@
       return { ok: false, reason: 'no readable body found on the page' };
     }
 
+    /*
+     * Check we actually came away with the article before storing it.
+     *
+     * An extraction can "succeed" and still be useless: pulling only the <h2>
+     * headings and none of the <div> prose produced articles that were
+     * nothing but titles. Refuse those rather than filling the feed with
+     * headings, and say why in the library so it can be retried.
+     */
+    const q = result.quality || {};
+    if (result.source === 'article' && q.blocks >= 3 && q.headingRatio > 0.8) {
+      await store.updateItem(item.id, {
+        state: 'failed', fetchedAt: Date.now(),
+        debug: Object.assign({ via: result.via }, q),
+      });
+      return {
+        ok: false,
+        reason: `grabbed ${q.headings}/${q.blocks} blocks as headings and almost no prose`,
+      };
+    }
+    if (result.source === 'article' && q.coverage != null && q.coverage < 0.4) {
+      await store.updateItem(item.id, {
+        state: 'failed', fetchedAt: Date.now(),
+        debug: Object.assign({ via: result.via }, q),
+      });
+      return {
+        ok: false,
+        reason: `only captured ${Math.round(q.coverage * 100)}% of the page's text`,
+      };
+    }
+
     // A single short post is readable in the feed as-is; dripping it would
     // just be noise. Mark it skipped, not failed — nothing went wrong.
     const chars = result.blocks.reduce((n, b) => n + b.text.length, 0);
@@ -265,13 +341,13 @@
       // Keep the extracted blocks. Re-chunking after a settings change then
       // costs nothing, instead of re-opening every article in a browser tab.
       blocks: result.blocks,
-      debug: {
+      debug: Object.assign({
         via: result.via || result.source,
         blocks: result.blocks.length,
         chars,
         headings,
         postCount: result.postCount || null,
-      },
+      }, result.quality || {}),
     });
     await store.setSnippets(item.id, snippets);
     return { ok: true, kind, snippets: snippets.length, chars, headings };
@@ -279,6 +355,6 @@
 
   root.AD.extract = {
     extractInto, extractArticle, extractThread,
-    blocksFromArticle, dropTitleEcho, findProseFallback,
+    blocksFromArticle, dropTitleEcho, findProseFallback, assessBlocks,
   };
 })(globalThis);

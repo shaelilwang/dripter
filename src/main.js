@@ -8,7 +8,9 @@
   const { sel, store, collect, extract, inject } = root.AD;
 
   const path = () => location.pathname;
-  const isBookmarks = () => /^\/i\/bookmarks/.test(path());
+  // /i/history lists what you've opened recently and carries the same post
+  // markup, so it works as a harvest source alongside saved bookmarks.
+  const isBookmarks = () => /^\/i\/(bookmarks|history)/.test(path());
   const isHome = () => /^\/(home)?$/.test(path());
 
   /* ---------------------------------------------------------------- */
@@ -35,7 +37,9 @@
 
       case 'AD_HARVEST':
         if (!isBookmarks()) {
-          reply(Promise.reject(new Error('Not on the bookmarks page.')));
+          reply(Promise.reject(new Error(
+            'Open x.com/i/bookmarks (or /i/history) first — harvest reads the ' +
+            'list that page renders.')));
           return true;
         }
         reply(collect.harvestAll((p) => {

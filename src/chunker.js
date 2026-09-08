@@ -1,20 +1,22 @@
 /* Article Drip — chunker.js
  *
- * Turns extracted article text into tweet-sized snippets, entirely offline.
+ * Turns an extracted article into a handful of feed cards, entirely offline.
  *
- * Input is an array of blocks: { type: 'heading' | 'para', text: '...' }
- * Output is an array of snippets: { text, kind, block, i }
+ * Input is an array of blocks: { type: 'heading' | 'para', atomic?, text }
+ * Output is an array of snippets: { text, kind, heading, i }
  *
- * Rules, in priority order:
- *   1. Never merge across a block boundary. A paragraph break is a real
- *      authorial signal; honoring it is most of what makes chunks readable.
- *   2. Headings get their own snippet and act as section markers.
- *   3. Inside a paragraph, pack whole sentences greedily up to maxChars.
- *   4. A sentence longer than maxChars is split on clause boundaries
- *      (; — : ,) preferring a break in the back half of the budget.
- *   5. Only if there is no clause boundary do we break on a word boundary.
- *   6. Any forced break is marked with an ellipsis on both sides so you can
- *      see the seam and know the thought continues.
+ * The content is never rewritten. Cards are decided by moving BOUNDARIES,
+ * not by cutting text to a length:
+ *
+ *   1. Blocks become sections: a heading starts one, and a thread post is a
+ *      section on its own.
+ *   2. Adjacent sections are merged until there are at most `maxCards` of
+ *      them, balanced by length so cards come out roughly even.
+ *   3. Each group becomes one card. The group's first heading goes in the
+ *      card header; any further headings stay inline so nothing is lost.
+ *
+ * Only if `maxChars` is set above 0 does sentence-level splitting come back,
+ * which inserts ellipsis marks and therefore does change what you read.
  *
  * Runs in the browser and in node (see tests/chunker.test.js).
  */
@@ -36,7 +38,13 @@
      * Chasing a target length is what turned one thread into 264 cards
      * showing a single bullet each.
      */
-    maxChars: 2500,
+    // Hard ceiling on cards per article. Sections are merged at their own
+    // boundaries to reach it — text is never cut or rewritten to fit.
+    maxCards: 5,
+    // 0 = never split text to hit a length. Any positive value re-enables
+    // sentence-level splitting, which inserts ellipsis marks at the seams and
+    // therefore alters what you read; leave it off unless you want that.
+    maxChars: 0,
     minChars: 40,    // below this a trailing chunk is a "runt" worth merging
     mergeRunts: true,
     groupBySection: true,
@@ -344,12 +352,102 @@
       if (isHeading && text.length <= 120) {
         flush();
         cur.heading = text;
+      } else if (block && block.atomic) {
+        // A thread post is its own section, so a 20-post thread has 20
+        // sections to distribute rather than one giant one.
+        flush();
+        cur.paras.push({ text, atomic: true });
+        flush();
       } else {
-        cur.paras.push({ text, atomic: !!(block && block.atomic) });
+        cur.paras.push({ text, atomic: false });
       }
     }
     flush();
     return sections;
+  }
+
+  const sectionChars = (sec) =>
+    (sec.heading ? sec.heading.length : 0) +
+    sec.paras.reduce((n, p) => n + p.text.length, 0);
+
+  /**
+   * Merge adjacent sections until there are at most `maxGroups` of them.
+   *
+   * Only the boundaries move — no text is split, trimmed or rewritten, so
+   * what you read is exactly what the author wrote. Groups are balanced by
+   * character count so one card isn't a paragraph while the next is half the
+   * article.
+   */
+  function groupSections(sections, maxGroups) {
+    const n = sections.length;
+    if (!maxGroups || maxGroups < 1 || n <= maxGroups) {
+      return sections.map((s) => [s]);
+    }
+
+    const weights = sections.map(sectionChars);
+    const total = weights.reduce((a, b) => a + b, 0);
+
+    const groups = [];
+    let cur = [];
+    let curW = 0;
+    let consumed = 0;
+
+    for (let i = 0; i < n; i++) {
+      cur.push(sections[i]);
+      curW += weights[i];
+      consumed += weights[i];
+
+      const remainingSections = n - i - 1;
+      const remainingGroups = maxGroups - groups.length - 1;
+
+      // Every remaining group needs at least one section, so stop here if
+      // we're about to starve them.
+      if (remainingSections <= remainingGroups) {
+        groups.push(cur); cur = []; curW = 0;
+        continue;
+      }
+
+      // Close once this group is as near its share as it's going to get.
+      //
+      // Look one section ahead rather than closing the moment the share is
+      // reached: always overshooting leaves the tail starved (twelve equal
+      // sections came out 3,3,3,2,1 instead of 2,2,3,2,3).
+      const share = (total - (consumed - curW)) / (maxGroups - groups.length);
+      const nextW = i + 1 < n ? weights[i + 1] : 0;
+      const stopHere = Math.abs(curW - share);
+      const takeMore = Math.abs(curW + nextW - share);
+
+      if (remainingGroups > 0 && stopHere <= takeMore) {
+        groups.push(cur); cur = []; curW = 0;
+      }
+    }
+    if (cur.length) groups.push(cur);
+
+    // Belt and braces: never hand back more groups than asked for.
+    while (groups.length > maxGroups) {
+      const tail = groups.pop();
+      groups[groups.length - 1] = groups[groups.length - 1].concat(tail);
+    }
+    return groups;
+  }
+
+  /** Flatten a group of sections into one card's text, verbatim. */
+  function groupText(group, opts) {
+    const pieces = [];
+    group.forEach((sec, k) => {
+      // The first section's heading is shown in the card header; any further
+      // headings stay inline so no content is lost.
+      if (k > 0 && sec.heading) pieces.push(sec.heading);
+      for (const p of sec.paras) pieces.push(p.text);
+    });
+
+    let text = '';
+    for (const piece of pieces) {
+      text = text ? text + joinerFor(text, piece) + piece : piece;
+    }
+
+    const cap = opts.maxChars > 0 ? opts.maxChars : Infinity;
+    return text.length <= cap ? [text] : packParagraph(text, { ...opts, maxChars: cap });
   }
 
   /* ------------------------------------------------------------------ */
@@ -414,12 +512,17 @@
     // A heading rides along with the prose underneath it rather than taking a
     // card of its own — a card that is nothing but a heading tells you
     // nothing, and you have to advance past it to reach the actual content.
-    for (const sec of toSections(blocks, opts, trustHeuristic)) {
-      const parts = packSection(sec.paras, opts);
+    const sections = toSections(blocks, opts, trustHeuristic);
+    const groups = groupSections(sections, opts.maxCards);
+
+    for (const group of groups) {
+      const heading = group[0].heading;
+      const parts = groupText(group, opts).filter(Boolean);
 
       if (!parts.length) {
-        if (sec.heading) {
-          snippets.push({ text: sec.heading, kind: 'heading', heading: null, i: i++ });
+        // Nothing but a heading in this group — show it rather than drop it.
+        if (heading) {
+          snippets.push({ text: heading, kind: 'heading', heading: null, i: i++ });
         }
         continue;
       }
@@ -428,10 +531,8 @@
         snippets.push({
           text,
           kind: 'para',
-          // Continuation cards keep the heading for context, marked so it's
-          // clear you're still inside the same section.
-          heading: !sec.heading ? null
-            : (k === 0 ? sec.heading : sec.heading + ' (cont.)'),
+          heading: !heading ? null
+            : (k === 0 ? heading : heading + ' (cont.)'),
           i: i++,
         });
       });
@@ -442,6 +543,8 @@
 
   const api = {
     chunk,
+    groupSections,
+    toSections,
     normalize,
     splitSentences,
     looksLikeHeading,

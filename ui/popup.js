@@ -3,6 +3,8 @@ const store = globalThis.AD.store;
 
 const $ = (id) => document.getElementById(id);
 const BOOKMARKS_URL = 'https://x.com/i/bookmarks';
+// /i/history renders the same post markup, so it harvests just as well.
+const HARVEST_RE = /x\.com\/i\/(bookmarks|history)/;
 
 let jobPoll = null;
 
@@ -73,8 +75,8 @@ async function refresh() {
   }
 
   const tab = await activeTab();
-  const onBookmarks = tab && /x\.com\/i\/bookmarks/.test(tab.url || '');
-  $('harvest').textContent = onBookmarks ? 'Harvest bookmarks' : 'Open Bookmarks to harvest';
+  const onBookmarks = tab && HARVEST_RE.test(tab.url || '');
+  $('harvest').textContent = onBookmarks ? 'Harvest this list' : 'Open Bookmarks to harvest';
   $('doctor').disabled = !(tab && /(^https:\/\/(x|twitter)\.com)/.test(tab.url || ''));
   $('fetch').disabled = counts.fetchable === 0;
   $('fetch').textContent = counts.fetchable
@@ -97,7 +99,7 @@ $('enabled').addEventListener('change', async (e) => {
 
 $('harvest').addEventListener('click', async () => {
   const tab = await activeTab();
-  if (!tab || !/x\.com\/i\/bookmarks/.test(tab.url || '')) {
+  if (!tab || !HARVEST_RE.test(tab.url || '')) {
     await chrome.tabs.create({ url: BOOKMARKS_URL });
     window.close();
     return;

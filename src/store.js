@@ -30,7 +30,8 @@
   const DEFAULT_SETTINGS = {
     enabled: true,
     everyNPosts: 4,        // insert a card after every N real posts
-    maxChars: 2500,        // safety cap only; 0 = no cap. Sections are the unit.
+    maxCards: 5,           // at most this many cards per article
+    maxChars: 0,           // 0 = never split text to fit; content stays verbatim
     order: 'sequential',   // 'sequential' | 'roundRobin' | 'shuffle'
     autoAdvance: false,    // tapping Next loads the following snippet in place
     markReadOnView: true,  // count a snippet read once it's been on screen

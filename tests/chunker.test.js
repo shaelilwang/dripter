@@ -161,6 +161,58 @@ console.log('\nsection model');
     '1. First\n2. Second');
 }
 
+console.log('\ncards per article cap');
+{
+  const section = (n) => [
+    { type: 'heading', text: `Stage ${n}: A Heading Here` },
+    { type: 'para', text: `Body prose for stage ${n}. `.repeat(6) },
+  ];
+  const many = [];
+  for (let n = 1; n <= 12; n++) many.push(...section(n));
+
+  const out = C.chunk(many, { maxCards: 5 });
+  eq('twelve sections collapse to five cards', out.length, 5);
+  eq('fewer sections than the cap are left alone',
+    C.chunk([...section(1), ...section(2)], { maxCards: 5 }).length, 2);
+  eq('a cap of one yields a single card', C.chunk(many, { maxCards: 1 }).length, 1);
+
+  // The whole point: merging must not lose or alter a single character.
+  const joined = out.map((s) => (s.heading ? s.heading + '\n' : '') + s.text).join('\n');
+  for (let n = 1; n <= 12; n++) {
+    check(`stage ${n} heading survives`, joined.includes(`Stage ${n}: A Heading Here`));
+  }
+  check('no ellipsis was introduced', !joined.includes('…'), joined.slice(0, 80));
+  check('first card keeps its own heading', out[0].heading === 'Stage 1: A Heading Here');
+
+  // Cards should be roughly even rather than one huge and four tiny.
+  const lens = out.map((s) => s.text.length);
+  check('cards are balanced',
+    Math.max(...lens) <= Math.min(...lens) * 2.5,
+    JSON.stringify(lens));
+}
+{
+  // A thread: every post is its own section, so the cap applies to posts.
+  const posts = [];
+  for (let n = 1; n <= 20; n++) {
+    posts.push({ type: 'para', atomic: true, text: `Post number ${n} says a thing.` });
+  }
+  const out = C.chunk(posts, { maxCards: 5 });
+  eq('twenty posts collapse to five cards', out.length, 5);
+  const all = out.map((s) => s.text).join('\n');
+  for (let n = 1; n <= 20; n++) {
+    check(`post ${n} survives`, all.includes(`Post number ${n} says a thing.`));
+  }
+}
+{
+  // A heading-only article must still show its headings, not vanish.
+  const out = C.chunk([
+    { type: 'heading', text: 'Alpha' },
+    { type: 'heading', text: 'Beta' },
+  ], { maxCards: 5 });
+  check('headings with no body are still shown',
+    out.map((s) => s.text).join(' ').includes('Alpha'), JSON.stringify(out));
+}
+
 console.log('\nheading runaway guard');
 {
   // Fragmented extraction: a list of titles, no prose. Every line reads as a
