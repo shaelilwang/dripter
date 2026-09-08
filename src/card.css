@@ -1,0 +1,193 @@
+/* Article Drip — card.css
+ *
+ * Colors come from CSS custom properties that card.js samples off the live
+ * page at runtime, so the card tracks X's Default / Dim / Lights-out themes
+ * instead of guessing. The values here are only fallbacks.
+ */
+
+.ad-card {
+  --ad-bg: #ffffff;
+  --ad-fg: #0f1419;
+  --ad-muted: #536471;
+  --ad-border: #cfd9de;
+  --ad-accent: #1d9bf0;
+  --ad-tint: hsl(var(--ad-hue, 210) 70% 50%);
+
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--ad-border);
+  background: var(--ad-bg);
+  color: var(--ad-fg);
+  font-family: "TwitterChirp", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  position: relative;
+  overflow: hidden;
+  contain: content;
+}
+
+/* Colored spine so consecutive snippets from one article read as a set. */
+.ad-rail {
+  flex: 0 0 3px;
+  background: var(--ad-tint);
+  opacity: 0.85;
+}
+
+.ad-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 12px 16px 10px 13px;
+}
+
+/* ---- header ---- */
+
+.ad-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.ad-pill {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--ad-tint);
+  border: 1px solid color-mix(in srgb, var(--ad-tint) 45%, transparent);
+  background: color-mix(in srgb, var(--ad-tint) 10%, transparent);
+}
+
+.ad-title {
+  font-weight: 700;
+  color: var(--ad-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ad-meta {
+  flex: 0 0 auto;
+  color: var(--ad-muted);
+  font-weight: 400;
+}
+
+/* ---- snippet text ---- */
+
+.ad-text {
+  font-size: 17px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0 0 12px;
+  color: var(--ad-fg);
+}
+
+.ad-text.is-heading {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  padding-left: 10px;
+  border-left: 3px solid color-mix(in srgb, var(--ad-tint) 60%, transparent);
+}
+
+/* ---- progress ---- */
+
+.ad-progress {
+  height: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ad-fg) 12%, transparent);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.ad-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--ad-tint);
+  transition: width 220ms ease;
+}
+
+/* ---- footer ---- */
+
+.ad-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ad-muted);
+}
+
+.ad-count {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ad-actions button {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ad-muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+
+.ad-actions button:hover {
+  background: color-mix(in srgb, var(--ad-fg) 8%, transparent);
+  color: var(--ad-fg);
+}
+
+.ad-actions button:focus-visible {
+  outline: 2px solid var(--ad-accent);
+  outline-offset: 1px;
+}
+
+.ad-actions button[data-ad-act="next"] {
+  color: var(--ad-tint);
+  border-color: color-mix(in srgb, var(--ad-tint) 40%, transparent);
+  font-weight: 700;
+}
+
+.ad-actions button[data-ad-act="next"]:hover {
+  background: color-mix(in srgb, var(--ad-tint) 14%, transparent);
+  color: var(--ad-tint);
+}
+
+/* ---- states ---- */
+
+.ad-card.is-advancing .ad-text {
+  opacity: 0.25;
+  transition: opacity 90ms ease;
+}
+
+.ad-card.is-empty .ad-text {
+  color: var(--ad-muted);
+  font-size: 15px;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-progress > i,
+  .ad-card.is-advancing .ad-text {
+    transition: none;
+  }
+}

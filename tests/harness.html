@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Article Drip — injection harness</title>
+  <style>
+    body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           margin: 0; display: grid; grid-template-columns: 420px 1fr; height: 100vh; }
+    #results { padding: 18px; overflow: auto; border-right: 1px solid #ccc; background: #fafafa; }
+    #results h1 { font-size: 16px; margin: 0 0 12px; }
+    #results h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+                  color: #666; margin: 16px 0 6px; }
+    .t { padding: 2px 0; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .t.ok::before  { content: "ok   "; color: #0a7; }
+    .t.no::before  { content: "FAIL "; color: #c00; }
+    .t.no { color: #c00; }
+    #summary { margin-top: 18px; font-weight: 700; padding: 10px; border-radius: 6px; }
+    #feed { overflow: auto; padding: 0; }
+    /* Deliberately mimics x.com's structure, not its looks. */
+    .fakepost { padding: 14px 16px; border-bottom: 1px solid #e6ecf0; }
+    .fakepost b { display: block; font-size: 13px; }
+    .fakepost p { margin: 4px 0 0; color: #333; }
+  </style>
+  <link rel="stylesheet" href="../src/card.css">
+</head>
+<body>
+  <div id="results"><h1>Article Drip — injection harness</h1></div>
+  <div id="feed"></div>
+
+  <script>
+    /* ---- chrome.* shim, enough for store.js + card.js + inject.js ---- */
+    (function () {
+      let mem = {};
+      const listeners = [];
+      globalThis.chrome = {
+        storage: {
+          local: {
+            get(keys, cb) {
+              let out;
+              if (keys == null) out = JSON.parse(JSON.stringify(mem));
+              else if (typeof keys === 'string') out = { [keys]: mem[keys] };
+              else if (Array.isArray(keys)) { out = {}; for (const k of keys) out[k] = mem[k]; }
+              else { out = Object.assign({}, keys); for (const k of Object.keys(keys)) if (k in mem) out[k] = mem[k]; }
+              setTimeout(() => cb(out), 0);
+            },
+            set(obj, cb) {
+              const changes = {};
+              for (const [k, v] of Object.entries(obj)) changes[k] = { newValue: v };
+              Object.assign(mem, JSON.parse(JSON.stringify(obj)));
+              setTimeout(() => { cb && cb(); listeners.forEach((f) => f(changes, 'local')); }, 0);
+            },
+            clear(cb) { mem = {}; setTimeout(() => cb && cb(), 0); },
+          },
+          onChanged: { addListener: (f) => listeners.push(f) },
+        },
+        runtime: {
+          sendMessage() { return Promise.resolve(); },
+          onMessage: { addListener() {} },
+          getManifest: () => ({ version: 'harness' }),
+        },
+        tabs: { create() {}, sendMessage() { return Promise.resolve(); } },
+      };
+      globalThis.__resetStorage = () => { mem = {}; };
+    })();
+  </script>
+
+  <script src="../src/selectors.js"></script>
+  <script src="../src/dom.js"></script>
+  <script src="../src/chunker.js"></script>
+  <script src="../src/store.js"></script>
+  <script src="../src/card.js"></script>
+  <script src="../src/inject.js"></script>
+
+  <script>
+  (async function () {
+    const { store, inject, chunker } = AD;
+    const out = document.getElementById('results');
+    const feed = document.getElementById('feed');
+    let pass = 0, fail = 0;
+
+    const section = (t) => { const h = document.createElement('h2'); h.textContent = t; out.appendChild(h); };
+    const check = (name, cond, detail) => {
+      const d = document.createElement('div');
+      d.className = 't ' + (cond ? 'ok' : 'no');
+      d.textContent = name + (cond || !detail ? '' : ' — ' + detail);
+      out.appendChild(d);
+      cond ? pass++ : fail++;
+    };
+
+    // Tell the injector this page counts as the home timeline.
+    inject._setHomeCheck(() => true);
+
+    /* ---- build a fake timeline with x.com's structural contract ---- */
+    function buildFeed(n, { absolute = false } = {}) {
+      feed.innerHTML = '';
+      const tl = document.createElement('div');
+      tl.setAttribute('aria-label', 'Timeline: Your Home Timeline');
+      if (absolute) tl.style.position = 'relative';
+      for (let i = 0; i < n; i++) {
+        const cell = document.createElement('div');
+        cell.setAttribute('data-testid', 'cellInnerDiv');
+        if (absolute) { cell.style.position = 'absolute'; cell.style.transform = `translateY(${i * 90}px)`; }
+        const art = document.createElement('article');
+        art.setAttribute('data-testid', 'tweet');
+        art.className = 'fakepost';
+        art.innerHTML = `<b>@someone</b><p>Real timeline post number ${i}.</p>`;
+        cell.appendChild(art);
+        tl.appendChild(cell);
+      }
+      feed.appendChild(tl);
+      return tl;
+    }
+
+    const cards = () => [...document.querySelectorAll('[data-ad-card]')];
+    const cardTexts = () => cards().map((c) => c.querySelector('.ad-text').textContent);
+
+    async function seedArticle(id, nSnippets) {
+      await store.upsertItem({
+        id, url: 'https://x.com/a/status/' + id, kind: 'article',
+        title: 'Test Article ' + id, author: { name: 'A', handle: 'author' },
+      });
+      await store.setSnippets(id, Array.from({ length: nSnippets },
+        (_, i) => ({ text: `${id} · snippet ${i}`, kind: i === 0 ? 'heading' : 'para' })));
+    }
+
+    async function fresh(nCells, nSnippets, settings, opts) {
+      __resetStorage();
+      inject._resetLayout();
+      inject.clearCards();
+      await store.setSettings(Object.assign({ everyNPosts: 4, markReadOnView: false }, settings || {}));
+      await inject._reload();
+      await seedArticle('900', nSnippets);
+      buildFeed(nCells, opts);
+    }
+
+    /* ---------------------------------------------------------------- */
+    section('spacing');
+    await fresh(12, 50, { everyNPosts: 4 });
+    await inject.sweep();
+    check('inserts one card per N posts', cards().length === 3, `got ${cards().length}, expected 3`);
+
+    {
+      // Each card must sit immediately after every 4th cell.
+      const kids = [...document.querySelector('[aria-label^="Timeline:"]').children];
+      const positions = kids.map((k, i) => k.matches('[data-ad-card]') ? i : -1).filter((i) => i >= 0);
+      check('cards land at the right offsets',
+        positions.every((p, i) => p === (i + 1) * 4 + i),
+        JSON.stringify(positions));
+    }
+
+    section('idempotency');
+    {
+      const before = cards().length;
+      await inject.sweep();
+      await inject.sweep();
+      check('re-sweeping adds nothing', cards().length === before,
+        `${before} then ${cards().length}`);
+    }
+
+    section('distinct snippets');
+    {
+      const texts = cardTexts();
+      check('no two visible cards show the same snippet',
+        new Set(texts).size === texts.length, JSON.stringify(texts));
+      check('snippets come out in order',
+        texts.join('|') === ['900 · snippet 0', '900 · snippet 1', '900 · snippet 2'].join('|'),
+        JSON.stringify(texts));
+      check('heading snippet is styled as one',
+        cards()[0].querySelector('.ad-text').classList.contains('is-heading'));
+    }
+
+    section('virtualization churn');
+    {
+      // Simulate X tearing out the top of the list and appending new posts,
+      // which is exactly what happens as you scroll.
+      const tl = document.querySelector('[aria-label^="Timeline:"]');
+      for (let i = 0; i < 5; i++) tl.firstElementChild.remove();
+      for (let i = 0; i < 8; i++) {
+        const cell = document.createElement('div');
+        cell.setAttribute('data-testid', 'cellInnerDiv');
+        const art = document.createElement('article');
+        art.setAttribute('data-testid', 'tweet');
+        art.className = 'fakepost';
+        art.innerHTML = `<b>@someone</b><p>Newly loaded post ${i}.</p>`;
+        cell.appendChild(art);
+        tl.appendChild(cell);
+      }
+      await inject.sweep();
+
+      const kids = [...tl.children];
+      let since = 0, worst = 0, adjacent = false, prevWasCard = false;
+      for (const k of kids) {
+        const isCard = k.matches('[data-ad-card]');
+        if (isCard) {
+          if (prevWasCard) adjacent = true;
+          worst = Math.max(worst, since);
+          since = 0;
+        } else since++;
+        prevWasCard = isCard;
+      }
+      check('never leaves a gap wider than N after churn', worst <= 4, `worst gap ${worst}`);
+      check('never puts two cards back to back', !adjacent);
+
+      const texts = cardTexts();
+      check('still no duplicate snippets after churn',
+        new Set(texts).size === texts.length, JSON.stringify(texts));
+    }
+
+    section('queue exhaustion');
+    await fresh(40, 3, { everyNPosts: 4 });
+    await inject.sweep();
+    check('stops once snippets run out', cards().length === 3, `got ${cards().length}`);
+    check('inserts no empty-state cards mid-feed',
+      cards().every((c) => !c.classList.contains('is-empty')));
+
+    section('disabled');
+    await fresh(12, 50, { everyNPosts: 4, enabled: false });
+    await inject.sweep();
+    check('injects nothing when switched off', cards().length === 0, `got ${cards().length}`);
+
+    section('absolute-positioned timeline');
+    await fresh(12, 50, { everyNPosts: 4 }, { absolute: true });
+    await inject.sweep();
+    check('still injects', cards().length === 3, `got ${cards().length}`);
+    check('nests inside the cell instead of after it',
+      cards().every((c) => c.parentElement.matches('[data-testid="cellInnerDiv"]')));
+    await inject.sweep();
+    check('idempotent in absolute mode too', cards().length === 3, `got ${cards().length}`);
+
+    section('advancing');
+    await fresh(12, 50, { everyNPosts: 4 });
+    inject._resetLayout();
+    await inject.sweep();
+    {
+      const first = cards()[0];
+      const before = first.querySelector('.ad-text').textContent;
+      first.querySelector('[data-ad-act="next"]').click();
+      await new Promise((r) => setTimeout(r, 120));
+      const after = first.querySelector('.ad-text').textContent;
+      check('Next swaps the text in place', before !== after, `${before} -> ${after}`);
+      check('Next advanced the stored cursor',
+        (await store.getItem('900')).cursor >= 1,
+        'cursor ' + (await store.getItem('900')).cursor);
+
+      // Regression: repainting used to bypass the hand-out reservation, so
+      // the advanced card landed on a snippet another card was already showing.
+      const texts = cardTexts();
+      check('Next does not duplicate a snippet another card shows',
+        new Set(texts).size === texts.length, JSON.stringify(texts));
+
+      // And repeatedly advancing must keep finding new material.
+      for (let i = 0; i < 4; i++) {
+        first.querySelector('[data-ad-act="next"]').click();
+        await new Promise((r) => setTimeout(r, 90));
+      }
+      const advanced = cardTexts();
+      check('still distinct after several advances',
+        new Set(advanced).size === advanced.length, JSON.stringify(advanced));
+      check('advancing never lands on the empty state while snippets remain',
+        !cards().some((c) => c.classList.contains('is-empty')));
+    }
+
+    section('chunker on prose');
+    {
+      const prose = 'The rollout was staged. Dr. Chen signed off on Jan. 12 without much ceremony. ' +
+        'The answer was no. Everyone moved on to the next thing, which took another six weeks.';
+      const s = chunker.chunk(prose, { maxChars: 90 });
+      check('produces multiple snippets', s.length > 1, `got ${s.length}`);
+      check('respects the budget', s.every((x) => x.text.length <= 90),
+        'max ' + Math.max(...s.map((x) => x.text.length)));
+      check('did not break inside "Jan. 12"',
+        !s.some((x) => /Jan\.$/.test(x.text.trim())));
+    }
+
+    /* ---------------------------------------------------------------- */
+    const sum = document.createElement('div');
+    sum.id = 'summary';
+    sum.textContent = `${pass} passed, ${fail} failed`;
+    sum.style.background = fail ? '#fdd' : '#dfd';
+    out.appendChild(sum);
+    document.title = fail ? `FAIL (${fail})` : `PASS (${pass})`;
+    globalThis.__harness = { pass, fail };
+  })();
+  </script>
+</body>
+</html>

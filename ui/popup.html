@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { width: 340px; padding: 14px; }
+    .head { margin-bottom: 12px; }
+    .section { margin-top: 14px; }
+    .actions { display: flex; flex-direction: column; gap: 7px; }
+    .actions button { width: 100%; }
+    #upnext { font-size: 13px; line-height: 1.4; max-height: 92px; overflow: hidden; }
+    #msg { margin-top: 10px; }
+    footer { margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="row between head">
+    <h1>Article Drip</h1>
+    <label class="switch" title="Show snippets in your feed">
+      <input type="checkbox" id="enabled">
+      <span class="track"></span>
+    </label>
+  </div>
+
+  <div class="panel stat">
+    <div><b id="c-left">–</b><span>snippets left</span></div>
+    <div><b id="c-ready">–</b><span>queued</span></div>
+    <div><b id="c-pending">–</b><span>unfetched</span></div>
+    <div><b id="c-read">–</b><span>read</span></div>
+  </div>
+
+  <div class="section">
+    <h2 style="margin-top:0">Up next</h2>
+    <div class="panel" id="upnext">…</div>
+  </div>
+
+  <div class="section actions">
+    <button id="harvest" class="primary">Harvest bookmarks</button>
+    <button id="fetch">Fetch article bodies</button>
+    <button id="doctor">Selector Doctor</button>
+  </div>
+
+  <div id="msg"></div>
+
+  <footer>
+    <a href="#" id="opts" class="small">Settings &amp; library</a>
+    <span class="small muted" id="version"></span>
+  </footer>
+
+  <script src="../src/store.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
