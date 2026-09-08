@@ -42,11 +42,57 @@
     return blocks;
   }
 
+  /**
+   * Last-resort structural find, for when none of the articleBody testids
+   * match — which is likely, since X's Article markup couldn't be inspected
+   * up front and they rename things.
+   *
+   * Picks the deepest element still holding most of the page's prose. Going
+   * deepest matters: every ancestor up to <body> contains the article text
+   * too, and the shallow ones drag in nav and sidebar chrome.
+   *
+   * The length floor keeps this from firing on an ordinary post page.
+   */
+  function findProseFallback(minChars) {
+    const scope = sel.q('primaryColumn') || document.body;
+    const candidates = [];
+
+    for (const el of scope.querySelectorAll('div, section, main')) {
+      // Skip posts themselves and anything wrapping a whole timeline.
+      if (el.closest('article[data-testid="tweet"]')) continue;
+      if (el.querySelector('[data-testid="cellInnerDiv"]')) continue;
+
+      const len = (el.innerText || '').trim().length;
+      if (len < minChars) continue;
+
+      let depth = 0;
+      for (let p = el; p && p !== scope; p = p.parentElement) depth++;
+      candidates.push({ el, len, depth });
+    }
+
+    if (!candidates.length) return null;
+
+    const maxLen = Math.max(...candidates.map((c) => c.len));
+    // Among everything holding ~all the prose, take the most deeply nested.
+    return candidates
+      .filter((c) => c.len >= maxLen * 0.9)
+      .sort((a, b) => b.depth - a.depth)[0].el;
+  }
+
   async function extractArticle() {
-    const bodyEl = await dom.waitFor(() => {
+    let bodyEl = await dom.waitFor(() => {
       const el = sel.q('articleBody');
       return el && dom.richText(el).trim().length > 200 ? el : null;
     }, { timeout: 12000 });
+
+    // Named selectors missed — try to find the prose structurally instead.
+    if (!bodyEl) {
+      await dom.autoScroll({ maxSteps: 12, settleMs: 450 });
+      bodyEl = findProseFallback(1200);
+      if (bodyEl) console.info('[article-drip] articleBody selectors missed; ' +
+        'used the structural fallback. Run Selector Doctor here and add the ' +
+        'real selector to src/selectors.js.');
+    }
 
     if (!bodyEl) return null;
 
@@ -125,42 +171,57 @@
    * Extract whatever this page holds for `item`, chunk it, and store it.
    * Returns { ok, snippets, reason }.
    */
+  /**
+   * Extract whatever this page holds for `item`, chunk it, and store it.
+   *
+   * The kind recorded at harvest time is only a guess — X renders Articles in
+   * the bookmarks list as plain posts, so the list simply doesn't carry the
+   * information. This page does: if an Article body renders here, it's an
+   * Article, whatever we guessed earlier. So classify here and correct the
+   * record, rather than trusting the guess and extracting the wrong thing.
+   *
+   * Returns { ok, snippets, kind, reason }.
+   */
   async function extractInto(item) {
-    const settings = await root.AD.store.getSettings();
-    let result = null;
+    const store = root.AD.store;
+    const settings = await store.getSettings();
 
-    if (item.kind === 'article') {
-      result = await extractArticle();
-      // An Article link that didn't render an Article body: fall back to the
-      // post itself rather than losing the bookmark entirely.
-      if (!result) result = await extractThread(item.author && item.author.handle);
-    } else {
+    // Always try the Article body first, regardless of the recorded kind.
+    let result = await extractArticle();
+    let kind = 'article';
+
+    if (!result) {
       result = await extractThread(item.author && item.author.handle);
+      kind = result && result.postCount >= settings.minThreadPosts ? 'thread' : 'post';
     }
 
     if (!result || !result.blocks.length) {
-      await root.AD.store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
+      await store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
       return { ok: false, reason: 'no readable body found on the page' };
     }
 
-    if (result.source === 'thread' &&
-        item.kind === 'thread' &&
-        result.postCount < settings.minThreadPosts) {
-      await root.AD.store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
-      return { ok: false, reason: `only ${result.postCount} posts — below your thread minimum` };
+    // A single short post is readable in the feed as-is; dripping it would
+    // just be noise. Mark it skipped, not failed — nothing went wrong.
+    const chars = result.blocks.reduce((n, b) => n + b.text.length, 0);
+    if (kind === 'post' && chars < settings.minPostChars) {
+      await store.updateItem(item.id, {
+        kind, state: 'skipped', fetchedAt: Date.now(),
+      });
+      return { ok: false, skipped: true, kind, reason: `too short to drip (${chars} chars)` };
     }
 
     const snippets = chunker.chunk(result.blocks, { maxChars: settings.maxChars });
     if (!snippets.length) {
-      await root.AD.store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
+      await store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
       return { ok: false, reason: 'body was empty after chunking' };
     }
 
-    if (result.title && !item.title) {
-      await root.AD.store.updateItem(item.id, { title: result.title });
-    }
-    await root.AD.store.setSnippets(item.id, snippets);
-    return { ok: true, snippets: snippets.length };
+    await store.updateItem(item.id, {
+      kind,
+      title: result.title || item.title,
+    });
+    await store.setSnippets(item.id, snippets);
+    return { ok: true, kind, snippets: snippets.length };
   }
 
   root.AD.extract = { extractInto, extractArticle, extractThread, blocksFromArticle };

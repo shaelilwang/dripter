@@ -125,8 +125,11 @@ async function processItem(item) {
 async function runFetchBodies() {
   if (job && !job.finished) return job;
 
+  const settings = await AD.store.getSettings();
   const items = Object.values(await AD.store.getItems())
-    .filter((i) => i.state === 'pending')
+    // `likely !== false` keeps items harvested before the flag existed.
+    .filter((i) => i.state === 'pending' &&
+      (settings.fetchScope === 'all' || i.likely !== false))
     .sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
 
   job = { total: items.length, done: 0, ok: 0, failed: 0, current: null, finished: false, cancelled: false };

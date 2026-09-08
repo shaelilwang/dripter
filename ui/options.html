@@ -73,6 +73,22 @@
     <span>Threads</span>
   </label>
   <label class="field" style="margin-top:10px">
+    <span class="lbl">What to open when fetching</span>
+    <span class="hint">X shows native Articles in your bookmarks as ordinary posts, so
+      the list can't always tell. "Everything" opens each bookmark to find out.</span>
+    <select id="fetchScope">
+      <option value="likely">Likely long-form only — faster</option>
+      <option value="all">Everything — slower, catches disguised Articles</option>
+    </select>
+  </label>
+
+  <label class="field">
+    <span class="lbl">Minimum post length</span>
+    <span class="hint">A lone post shorter than this is skipped rather than dripped.</span>
+    <input type="number" id="minPostChars" min="0" max="5000" step="50"> characters
+  </label>
+
+  <label class="field" style="margin-top:10px">
     <span class="lbl">Minimum thread length</span>
     <span class="hint">Shorter self-threads aren't worth dripping.</span>
     <input type="number" id="minThreadPosts" min="1" max="50" step="1"> posts

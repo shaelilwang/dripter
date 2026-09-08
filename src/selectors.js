@@ -62,9 +62,19 @@
     /* ---- native X Articles ---- */
 
     // Link into a native long-form Article, wherever it appears.
+    // Often absent: a live bookmarks/history page showed Article markup with
+    // no /i/article/ href anywhere, so treat this as a bonus, not a test.
     articleLink: [
       'a[href*="/i/article/"]',
       'a[href*="/article/"]',
+    ],
+
+    // Presence-only proof that a post IS a native Article, for when there is
+    // no distinguishing href. 'article-cover-image' is confirmed live markup;
+    // the wildcard catches whatever X renames it to next.
+    articleMarker: [
+      '[data-testid="article-cover-image"]',
+      '[data-testid*="article" i]',
     ],
 
     // The rendered body of a native Article, on the Article page itself.
@@ -187,13 +197,30 @@
       }
     }
 
-    // Any testid mentioning "article" — the fastest way to learn what X calls
-    // its long-form markup today without guessing.
-    const articleish = Array.from(new Set(
-      Array.from(document.querySelectorAll('[data-testid]'))
-        .map((e) => e.getAttribute('data-testid'))
-        .filter((v) => /artic/i.test(v))
-    ));
+    // Any testid mentioning "article", with enough context to act on it.
+    // Knowing the name isn't enough -- we need to know whether it sits inside
+    // a post (so we can classify that post) and what it links to (so we can
+    // reach the body). A page can carry Article markup and no Article href.
+    const articleish = Array.from(document.querySelectorAll('[data-testid]'))
+      .filter((e) => /artic/i.test(e.getAttribute('data-testid')))
+      .slice(0, 20)
+      .map((e) => {
+        const host = e.closest('article[data-testid="tweet"]');
+        const link = (host || document).querySelector('a[href*="/status/"], a[href*="/article/"]');
+        return {
+          testid: e.getAttribute('data-testid'),
+          insideTweet: !!host,
+          nearestHref: link ? normalize(link.getAttribute('href')) : null,
+        };
+      });
+
+    // Links anywhere on the page, not just inside posts -- an Article link
+    // living outside the tweet element would be invisible to the scan above.
+    const pageWide = {};
+    for (const a of document.querySelectorAll('a[href]')) {
+      const key = normalize(a.getAttribute('href'));
+      if (/\/article|\/i\//.test(key)) pageWide[key] = (pageWide[key] || 0) + 1;
+    }
 
     return {
       posts: tweets.length,
@@ -202,10 +229,15 @@
       longestTexts: textLengths.sort((a, b) => b - a).slice(0, 8),
       longPosts: textLengths.filter((n) => n >= 400).length,
       articleish,
+      articleMarkers: document.querySelectorAll('[data-testid="article-cover-image"]').length,
       outbound: Array.from(outbound).slice(0, 10),
       linkShapes: Object.entries(linkShapes)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 20)
+        .map(([shape, n]) => ({ shape, n })),
+      pageWideSpecialLinks: Object.entries(pageWide)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
         .map(([shape, n]) => ({ shape, n })),
     };
   }

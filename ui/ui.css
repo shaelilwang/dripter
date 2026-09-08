@@ -183,4 +183,5 @@ input[type="number"], select {
 .pill.ready { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
 .pill.reading { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .pill.failed { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.pill.skipped { opacity: 0.7; }
 .pill.done { opacity: 0.6; }

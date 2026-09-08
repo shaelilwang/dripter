@@ -11,10 +11,12 @@ browser against the session you're already logged into.
 
 ## What it actually does
 
-1. **Harvest** — reads your bookmarks page and records which items are native
-   X Articles or self-threads worth reading.
-2. **Fetch** — visits each one in a background window and pulls its full text
-   out of the page.
+1. **Harvest** — records every bookmark. It deliberately doesn't filter by
+   length: X renders native Articles in the bookmarks list as ordinary, often
+   short, posts, so the list can't tell you what's long-form.
+2. **Fetch** — opens each one in a background window, which is where the
+   Article body actually lives, and works out what it really is: Article,
+   thread, long post, or not worth dripping.
 3. **Chunk** — splits that text into ~270-character snippets offline, breaking
    on sentence and paragraph boundaries rather than mid-thought.
 4. **Drip** — as you scroll `/home`, inserts a snippet card after every Nth
@@ -63,6 +65,8 @@ and the on/off switch.
 | Order | Sequential | Finish one article before starting the next |
 | Count as read after | 900 ms | Dwell time before a card auto-advances |
 | Minimum thread length | 3 posts | Shorter self-threads get skipped |
+| Minimum post length | 500 chars | Lone posts shorter than this are skipped |
+| What to open when fetching | Likely only | "Everything" opens every bookmark to find Articles disguised as plain posts |
 
 The library lists every article with a progress bar, and lets you restart,
 finish, or remove any of them.
@@ -136,10 +140,16 @@ snippet hand-out logic.
 What's covered: text chunking and sentence splitting, the reading state
 machine, export/import merge, and injection behavior.
 
-**What isn't:** the selectors in `src/selectors.js` have not been verified
-against a live logged-in x.com, because that needs your session. They follow
-X's long-standing `data-testid` conventions and are layered with fallbacks, but
-Selector Doctor is the ground truth — run it once after installing.
+**Partly verified:** a live authenticated Doctor run confirmed the structural
+selectors — `cellInnerDiv`, `tweet`, `tweetText`, `User-Name`, and the
+timestamp permalink. Those are real, not guesses.
+
+**Not verified:** the `articleBody` selectors, which only appear on an Article
+page. `extract.js` therefore carries `findProseFallback()`, a structural search
+for the deepest element holding the page's prose, so extraction works even when
+the named selectors miss. It logs to the console when it fires — if you see
+that, run Selector Doctor on that page and add the real selector to
+`src/selectors.js` so the fallback stops being needed.
 
 ---
 

@@ -49,9 +49,11 @@ async function refresh() {
   box.textContent = '';
   if (!next) {
     box.className = 'panel muted';
-    box.textContent = counts.pending
-      ? `${counts.pending} bookmark${counts.pending === 1 ? '' : 's'} still need bodies — run "Fetch article bodies".`
-      : 'Queue empty. Harvest your bookmarks to get started.';
+    box.textContent = counts.fetchable
+      ? `${counts.fetchable} bookmark${counts.fetchable === 1 ? '' : 's'} still need bodies — run "Fetch article bodies".`
+      : counts.pending
+        ? `${counts.pending} bookmark${counts.pending === 1 ? '' : 's'} held back as unlikely. Switch fetching to "Everything" in settings to open them anyway.`
+        : 'Queue empty. Harvest your bookmarks to get started.';
   } else {
     box.className = 'panel';
     const t = document.createElement('div');
@@ -74,9 +76,9 @@ async function refresh() {
   const onBookmarks = tab && /x\.com\/i\/bookmarks/.test(tab.url || '');
   $('harvest').textContent = onBookmarks ? 'Harvest bookmarks' : 'Open Bookmarks to harvest';
   $('doctor').disabled = !(tab && /(^https:\/\/(x|twitter)\.com)/.test(tab.url || ''));
-  $('fetch').disabled = counts.pending === 0;
-  $('fetch').textContent = counts.pending
-    ? `Fetch article bodies (${counts.pending})`
+  $('fetch').disabled = counts.fetchable === 0;
+  $('fetch').textContent = counts.fetchable
+    ? `Fetch article bodies (${counts.fetchable})`
     : 'Fetch article bodies';
 
   const mf = chrome.runtime.getManifest();

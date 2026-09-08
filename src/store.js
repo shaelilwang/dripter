@@ -38,6 +38,11 @@
     includeThreads: true,
     includeArticles: true,
     minThreadPosts: 3,     // below this a "thread" isn't worth dripping
+    minPostChars: 500,     // a lone post shorter than this isn't worth dripping
+    // 'likely' fetches only bookmarks that look long-form from the list;
+    // 'all' visits every bookmark, which is slower but catches Articles that
+    // are indistinguishable from ordinary posts until you open them.
+    fetchScope: 'likely',
   };
 
   const DEFAULT_STATS = { snippetsRead: 0, articlesFinished: 0, lastHarvest: null };
@@ -203,9 +208,14 @@
 
   async function counts() {
     const items = Object.values(await getItems());
-    const c = { total: items.length, pending: 0, ready: 0, reading: 0, done: 0, failed: 0, snippetsLeft: 0 };
+    const c = {
+      total: items.length, pending: 0, ready: 0, reading: 0,
+      done: 0, failed: 0, skipped: 0, snippetsLeft: 0, fetchable: 0,
+    };
+    const scope = (await getSettings()).fetchScope;
     for (const it of items) {
       c[it.state] = (c[it.state] || 0) + 1;
+      if (it.state === 'pending' && (scope === 'all' || it.likely !== false)) c.fetchable++;
       if (isLive(it)) c.snippetsLeft += it.snippets.length - it.cursor;
     }
     return c;

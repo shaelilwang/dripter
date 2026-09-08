@@ -68,6 +68,7 @@
   <script src="../src/dom.js"></script>
   <script src="../src/chunker.js"></script>
   <script src="../src/store.js"></script>
+  <script src="../src/collect.js"></script>
   <script src="../src/card.js"></script>
   <script src="../src/inject.js"></script>
 
@@ -270,6 +271,120 @@
         'max ' + Math.max(...s.map((x) => x.text.length)));
       check('did not break inside "Jan. 12"',
         !s.some((x) => /Jan\.$/.test(x.text.trim())));
+    }
+
+    section('bookmark classification');
+    {
+      // Mirrors what a live census actually showed: Article markup present
+      // (data-testid="article-cover-image") with NO /i/article/ href anywhere.
+      // Detection has to work off the marker, not the URL.
+      function fakeBookmark({ handle, id, text, article, thread }) {
+        const cell = document.createElement('div');
+        cell.setAttribute('data-testid', 'cellInnerDiv');
+        const art = document.createElement('article');
+        art.setAttribute('data-testid', 'tweet');
+        art.className = 'fakepost';
+
+        const un = document.createElement('div');
+        un.setAttribute('data-testid', 'User-Name');
+        un.innerHTML = `<span>Display Name</span><span>@${handle}</span>`;
+        art.appendChild(un);
+
+        const tt = document.createElement('div');
+        tt.setAttribute('data-testid', 'tweetText');
+        tt.textContent = text;
+        art.appendChild(tt);
+
+        const a = document.createElement('a');
+        a.setAttribute('href', `/${handle}/status/${id}`);
+        a.innerHTML = '<time datetime="2026-01-01T00:00:00Z"></time>';
+        art.appendChild(a);
+
+        if (article) {
+          const cover = document.createElement('div');
+          cover.setAttribute('data-testid', 'article-cover-image');
+          art.appendChild(cover);
+        }
+        if (thread) {
+          const st = document.createElement('span');
+          st.textContent = 'Show this thread';
+          art.appendChild(st);
+        }
+        cell.appendChild(art);
+        return cell;
+      }
+
+      __resetStorage();
+      await store.setSettings({ includeArticles: true, includeThreads: true });
+      feed.innerHTML = '';
+      const tl = document.createElement('div');
+      tl.setAttribute('aria-label', 'Timeline: Bookmarks');
+      const long = 'A really quite long bookmarked post. '.repeat(15);
+      tl.append(
+        fakeBookmark({ handle: 'joulee', id: '111', text: 'Cover-image Article', article: true }),
+        fakeBookmark({ handle: 'DeRonin_', id: '222', text: '1/ starting a thread here', thread: true }),
+        fakeBookmark({ handle: 'KenWattana', id: '333', text: long }),
+        fakeBookmark({ handle: 'buildwithmaya', id: '444', text: 'just a short take' })
+      );
+      feed.appendChild(tl);
+
+      await AD.collect.harvestVisible(await store.getSettings());
+      const items = await store.getItems();
+
+      check('Article detected with no /i/article/ link present',
+        items['111'] && items['111'].kind === 'article',
+        JSON.stringify(items['111'] && items['111'].kind));
+      check('thread detected via "Show this thread"',
+        items['222'] && items['222'].kind === 'thread',
+        JSON.stringify(items['222'] && items['222'].kind));
+      check('long plain post is kept',
+        items['333'] && items['333'].kind === 'post');
+
+      // A short post must NOT be dropped here: a native Article looks exactly
+      // like one in the bookmarks list, and its body only exists on the status
+      // page. Keep it, flag it unlikely, decide after opening it.
+      check('short post is kept, not discarded', !!items['444']);
+      check('short post is flagged unlikely',
+        items['444'] && items['444'].likely === false,
+        JSON.stringify(items['444'] && items['444'].likely));
+      check('article is flagged likely despite being short',
+        items['111'] && items['111'].likely === true);
+      check('thread is flagged likely', items['222'] && items['222'].likely === true);
+      check('long post is flagged likely', items['333'] && items['333'].likely === true);
+      check('handle comes from the permalink',
+        items['111'] && items['111'].author.handle === 'joulee',
+        JSON.stringify(items['111'] && items['111'].author));
+      check('display name survives span-flattening',
+        items['111'] && items['111'].author.name === 'Display Name',
+        JSON.stringify(items['111'] && items['111'].author));
+      check('permalink url is built correctly',
+        items['111'] && items['111'].statusUrl === 'https://x.com/joulee/status/111',
+        JSON.stringify(items['111'] && items['111'].statusUrl));
+
+      const cen = AD.sel.census();
+      check('census counts the cover images', cen.articleMarkers === 1, String(cen.articleMarkers));
+      check('census reports the marker as in-post',
+        cen.articleish.length === 1 && cen.articleish[0].insideTweet === true,
+        JSON.stringify(cen.articleish));
+      check('census finds no article links, matching the live reading',
+        cen.pageWideSpecialLinks.length === 0,
+        JSON.stringify(cen.pageWideSpecialLinks));
+
+      // Re-harvesting the same rendered posts must not duplicate them.
+      await AD.collect.harvestVisible(await store.getSettings());
+      check('re-harvest is idempotent',
+        Object.keys(await store.getItems()).length === 4,
+        String(Object.keys(await store.getItems()).length));
+
+      // 'likely' drives what the fetch step opens by default.
+      const c = await store.counts();
+      check('default scope holds back the unlikely one',
+        c.fetchable === 3, `fetchable ${c.fetchable} of pending ${c.pending}`);
+      await store.setSettings({ fetchScope: 'all' });
+      check('"everything" scope offers all four',
+        (await store.counts()).fetchable === 4,
+        String((await store.counts()).fetchable));
+      await store.setSettings({ fetchScope: 'likely' });
     }
 
     /* ---------------------------------------------------------------- */

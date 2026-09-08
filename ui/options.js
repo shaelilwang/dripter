@@ -2,9 +2,9 @@
 const store = globalThis.AD.store;
 const $ = (id) => document.getElementById(id);
 
-const NUMBERS = ['everyNPosts', 'maxChars', 'dwellMs', 'minThreadPosts'];
+const NUMBERS = ['everyNPosts', 'maxChars', 'dwellMs', 'minThreadPosts', 'minPostChars'];
 const FLAGS = ['markReadOnView', 'includeArticles', 'includeThreads'];
-const SELECTS = ['order'];
+const SELECTS = ['order', 'fetchScope'];
 
 let filter = 'all';
 
@@ -56,7 +56,7 @@ function wireSettings() {
 /* library                                                             */
 /* ------------------------------------------------------------------ */
 
-const STATES = ['all', 'pending', 'ready', 'reading', 'done', 'failed'];
+const STATES = ['all', 'pending', 'ready', 'reading', 'done', 'skipped', 'failed'];
 
 function renderFilters(counts) {
   const wrap = $('filters');
@@ -137,7 +137,7 @@ async function renderLibrary() {
   const list = Object.values(items)
     .filter((it) => filter === 'all' || it.state === filter)
     .sort((a, b) => {
-      const rank = { reading: 0, ready: 1, pending: 2, failed: 3, done: 4 };
+      const rank = { reading: 0, ready: 1, pending: 2, failed: 3, skipped: 4, done: 5 };
       const d = (rank[a.state] ?? 9) - (rank[b.state] ?? 9);
       return d || (b.addedAt || 0) - (a.addedAt || 0);
     });
@@ -310,8 +310,17 @@ function renderCensus(c, out) {
   line('with a card', String(c.withCard));
   line('"Show this thread"', String(c.withThreadHint));
   line('longest texts', (c.longestTexts || []).join(', ') || '—');
-  line('article-ish testids',
-    (c.articleish || []).length ? c.articleish.join(', ') : 'none found', true);
+  line('article cover images', String(c.articleMarkers == null ? '?' : c.articleMarkers));
+  line('article-ish markup',
+    (c.articleish || []).length
+      ? c.articleish.map((a) =>
+          `${a.testid}  ${a.insideTweet ? 'in-post' : 'OUTSIDE-post'}  ${a.nearestHref || 'no link'}`
+        ).join('\n')
+      : 'none found', true);
+  line('article/i links page-wide',
+    (c.pageWideSpecialLinks || []).length
+      ? c.pageWideSpecialLinks.map((x) => `${x.n}×  ${x.shape}`).join('\n')
+      : 'none', true);
   line('outbound links',
     (c.outbound || []).length ? c.outbound.join('\n') : 'none', true);
 
