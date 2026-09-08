@@ -1,110 +1,151 @@
 /* Article Drip — card.css
  *
- * Colors come from CSS custom properties that card.js samples off the live
- * page at runtime, so the card tracks X's Default / Dim / Lights-out themes
- * instead of guessing. The values here are only fallbacks.
+ * The card mirrors X's own post anatomy: 40px avatar in a left gutter, a
+ * name/handle/meta line, body copy at X's 15px/20px, then a muted action row.
+ * The goal is that it reads as part of the feed, not as an overlay on it.
+ *
+ * Theme colors are sampled off the live page by card.js and written as inline
+ * custom properties on <html>, so the card tracks Default / Dim / Lights-out.
+ *
+ * IMPORTANT: these fallbacks live on :root, NOT on .ad-card. A custom property
+ * declared on the element itself beats one inherited from <html>, so putting
+ * them on .ad-card silently overrode every sampled value and the card rendered
+ * white on dark themes.
  */
 
-.ad-card {
+:root {
   --ad-bg: #ffffff;
   --ad-fg: #0f1419;
   --ad-muted: #536471;
-  --ad-border: #cfd9de;
-  --ad-accent: #1d9bf0;
-  --ad-tint: hsl(var(--ad-hue, 210) 70% 50%);
+  --ad-border: #eff3f4;
+  --ad-accent: rgb(29, 155, 240);
+  --ad-lightness: 45%;
+}
+
+.ad-card {
+  --ad-tint: hsl(var(--ad-hue, 210) 62% var(--ad-lightness, 45%));
 
   display: flex;
-  gap: 0;
+  gap: 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--ad-border);
   background: var(--ad-bg);
   color: var(--ad-fg);
   font-family: "TwitterChirp", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 20px;
   position: relative;
-  overflow: hidden;
-  contain: content;
 }
 
-/* Colored spine so consecutive snippets from one article read as a set. */
-.ad-rail {
-  flex: 0 0 3px;
+/* ---- avatar gutter ---- */
+
+.ad-avatar {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   background: var(--ad-tint);
-  opacity: 0.85;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  user-select: none;
+  overflow: hidden;
 }
+
+.ad-avatar svg { width: 20px; height: 20px; fill: currentColor; }
+
+/* ---- content column ---- */
 
 .ad-body {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 12px 16px 10px 13px;
 }
-
-/* ---- header ---- */
 
 .ad-head {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.2;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 2px;
   min-width: 0;
 }
 
-.ad-pill {
-  flex: 0 0 auto;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: var(--ad-tint);
-  border: 1px solid color-mix(in srgb, var(--ad-tint) 45%, transparent);
-  background: color-mix(in srgb, var(--ad-tint) 10%, transparent);
-}
-
+/* Shrinks to fit rather than being hard-capped, so short titles don't leave
+   a gap before the separator and long ones still ellipsize. */
 .ad-title {
   font-weight: 700;
   color: var(--ad-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: 3em;
 }
 
 .ad-meta {
-  flex: 0 0 auto;
   color: var(--ad-muted);
   font-weight: 400;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ad-dot {
+  color: var(--ad-muted);
+  font-weight: 400;
+  flex: 0 0 auto;
+}
+
+.ad-badge {
+  color: var(--ad-tint);
+  font-weight: 600;
+  font-size: 13px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- snippet text ---- */
 
 .ad-text {
-  font-size: 17px;
-  line-height: 1.45;
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  margin: 0 0 12px;
   color: var(--ad-fg);
 }
 
+/* A section heading inside an article. Distinct, but not a different object. */
 .ad-text.is-heading {
-  font-size: 19px;
-  font-weight: 800;
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 23px;
   letter-spacing: -0.01em;
-  padding-left: 10px;
-  border-left: 3px solid color-mix(in srgb, var(--ad-tint) 60%, transparent);
 }
 
-/* ---- progress ---- */
+/* ---- footer ---- */
+
+.ad-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  max-width: 425px; /* matches the width of X's own action row */
+}
 
 .ad-progress {
+  flex: 1 1 auto;
   height: 2px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--ad-fg) 12%, transparent);
+  background: color-mix(in srgb, var(--ad-fg) 14%, transparent);
   overflow: hidden;
-  margin-bottom: 8px;
+  min-width: 40px;
 }
 
 .ad-progress > i {
@@ -114,46 +155,30 @@
   transition: width 220ms ease;
 }
 
-/* ---- footer ---- */
-
-.ad-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--ad-muted);
-}
-
-.ad-count {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-}
-
 .ad-actions {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 2px;
+  flex: 0 0 auto;
 }
 
 .ad-actions button {
   appearance: none;
-  border: 1px solid transparent;
+  border: 0;
   background: transparent;
   color: var(--ad-muted);
   font: inherit;
   font-size: 13px;
-  padding: 5px 10px;
+  line-height: 1;
+  padding: 6px 9px;
   border-radius: 999px;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
   white-space: nowrap;
 }
 
 .ad-actions button:hover {
-  background: color-mix(in srgb, var(--ad-fg) 8%, transparent);
-  color: var(--ad-fg);
+  background: color-mix(in srgb, var(--ad-tint) 12%, transparent);
+  color: var(--ad-tint);
 }
 
 .ad-actions button:focus-visible {
@@ -163,31 +188,16 @@
 
 .ad-actions button[data-ad-act="next"] {
   color: var(--ad-tint);
-  border-color: color-mix(in srgb, var(--ad-tint) 40%, transparent);
   font-weight: 700;
-}
-
-.ad-actions button[data-ad-act="next"]:hover {
-  background: color-mix(in srgb, var(--ad-tint) 14%, transparent);
-  color: var(--ad-tint);
 }
 
 /* ---- states ---- */
 
-.ad-card.is-advancing .ad-text {
-  opacity: 0.25;
-  transition: opacity 90ms ease;
-}
-
-.ad-card.is-empty .ad-text {
-  color: var(--ad-muted);
-  font-size: 15px;
-  font-style: italic;
-}
+.ad-card.is-advancing .ad-text { opacity: 0.25; transition: opacity 90ms ease; }
+.ad-card.is-empty .ad-text { color: var(--ad-muted); }
+.ad-card.is-empty .ad-foot { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .ad-progress > i,
-  .ad-card.is-advancing .ad-text {
-    transition: none;
-  }
+  .ad-card.is-advancing .ad-text { transition: none; }
 }

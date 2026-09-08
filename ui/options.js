@@ -93,12 +93,18 @@ function itemRow(it) {
   const meta = document.createElement('div');
   meta.className = 'small muted truncate';
   const total = (it.snippets || []).length;
+  const d = it.debug;
   const bits = [
     it.kind,
     it.author && it.author.handle ? '@' + it.author.handle : null,
     total ? `${it.cursor}/${total} snippets` : null,
+    // Surface how the body was found and how much of it there was: a card
+    // full of headings almost always means few chars via an odd route.
+    d ? `${d.chars} chars via ${d.via}` : null,
+    d && d.headings ? `${d.headings} headings` : null,
   ].filter(Boolean);
   meta.textContent = bits.join(' · ');
+  meta.title = d ? JSON.stringify(d, null, 2) : '';
   mid.appendChild(meta);
 
   if (total) {

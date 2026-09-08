@@ -82,24 +82,28 @@
     card.setAttribute('data-ad-card', '1');
     card.setAttribute('role', 'article');
 
-    card.appendChild(el('div', 'ad-rail'));
+    // Left gutter avatar, same 40px as X's own, so the text column lines up
+    // with every other post in the feed.
+    card.appendChild(el('div', 'ad-avatar'));
 
     const body = el('div', 'ad-body');
 
+    // Header reads like a post byline: Title · @handle · drip 4/8
     const head = el('div', 'ad-head');
-    head.appendChild(el('span', 'ad-pill', 'Drip'));
     head.appendChild(el('span', 'ad-title'));
+    head.appendChild(el('span', 'ad-dot', '·'));
     head.appendChild(el('span', 'ad-meta'));
+    head.appendChild(el('span', 'ad-dot', '·'));
+    head.appendChild(el('span', 'ad-badge'));
     body.appendChild(head);
 
     body.appendChild(el('div', 'ad-text'));
 
+    const foot = el('div', 'ad-foot');
     const prog = el('div', 'ad-progress');
     prog.appendChild(document.createElement('i'));
-    body.appendChild(prog);
+    foot.appendChild(prog);
 
-    const foot = el('div', 'ad-foot');
-    foot.appendChild(el('span', 'ad-count'));
     const acts = el('div', 'ad-actions');
     for (const [act, label, title] of [
       ['later', 'Later', 'Skip to a different article'],
@@ -136,22 +140,25 @@
     textEl.textContent = p.snippet ? p.snippet.text : '';
     textEl.classList.toggle('is-heading', !!(p.snippet && p.snippet.kind === 'heading'));
 
-    card.querySelector('.ad-title').textContent = p.title || 'Untitled';
-    card.querySelector('.ad-title').title = p.title || '';
+    const title = p.title || 'Untitled';
+    card.querySelector('.ad-title').textContent = title;
+    card.querySelector('.ad-title').title = title;
+
+    const initial = (title.match(/[A-Za-z0-9]/) || ['·'])[0].toUpperCase();
+    card.querySelector('.ad-avatar').textContent = isEmpty ? '·' : initial;
 
     const handle = p.author && p.author.handle ? '@' + p.author.handle : '';
-    card.querySelector('.ad-meta').textContent =
-      isEmpty ? '' : [handle, p.kind === 'thread' ? 'thread' : 'article']
-        .filter(Boolean).join(' · ');
+    card.querySelector('.ad-meta').textContent = isEmpty ? '' : handle;
+    card.querySelector('.ad-badge').textContent =
+      isEmpty ? '' : `drip ${p.index + 1}/${p.total}`;
+
+    // Hide the separator dots when there's nothing between them.
+    for (const d of card.querySelectorAll('.ad-dot')) {
+      d.style.display = isEmpty ? 'none' : '';
+    }
 
     const pct = p.total ? Math.round(((p.index + 1) / p.total) * 100) : 0;
     card.querySelector('.ad-progress > i').style.width = pct + '%';
-    card.querySelector('.ad-count').textContent =
-      isEmpty ? '' : `${p.index + 1} / ${p.total}`;
-
-    for (const b of card.querySelectorAll('.ad-actions button')) {
-      b.style.display = isEmpty ? 'none' : '';
-    }
     card.setAttribute('aria-label',
       isEmpty ? 'Article Drip: queue empty'
               : `Article Drip snippet ${p.index + 1} of ${p.total} from ${p.title}`);

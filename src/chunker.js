@@ -74,9 +74,12 @@
 
   /** A block is a heading if it's short, unpunctuated, and not a fragment. */
   function looksLikeHeading(text) {
-    if (text.length > 90) return false;
+    if (text.length > 80) return false;
     if (/[.!?,;:]\s*$/.test(text)) return false;
-    if (text.split(/\s+/).length > 14) return false;
+    if (text.split(/\s+/).length > 12) return false;
+    // Headings open with a capital or a number; a fragment mid-sentence
+    // usually doesn't. This is what keeps broken-up prose out.
+    if (!/^["'“(\[]?[A-Z0-9]/.test(text)) return false;
     return true;
   }
 
@@ -269,12 +272,29 @@
     const snippets = [];
     let i = 0;
 
+    /*
+     * Guard against the heading heuristic running away.
+     *
+     * When an extractor hands us fragmented text — one short line per nested
+     * div, or a list of article titles instead of one article's prose — a
+     * large share of blocks look like headings, and the reader ends up with
+     * a card full of bold fragments and no actual content.
+     *
+     * A real article is mostly prose. If most untyped blocks read as headings
+     * the heuristic is wrong about this document, so stop trusting it here.
+     * Blocks explicitly typed by the extractor are always honoured.
+     */
+    const untyped = blocks.filter((b) => b && !b.type && normalize(b.text));
+    const headingish = untyped.filter((b) => looksLikeHeading(normalize(b.text)));
+    const trustHeuristic =
+      !(untyped.length >= 4 && headingish.length / untyped.length > 0.5);
+
     blocks.forEach((block, bi) => {
       const text = normalize(block && block.text);
       if (!text) return;
 
       const isHeading = block.type === 'heading' ||
-        (block.type !== 'para' && looksLikeHeading(text));
+        (block.type !== 'para' && trustHeuristic && looksLikeHeading(text));
 
       if (isHeading) {
         // A heading longer than the budget is rare; treat it as prose.

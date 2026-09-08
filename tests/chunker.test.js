@@ -79,6 +79,54 @@ console.log('\nblock handling');
   eq('heading is tagged', out[0].kind, 'heading');
 }
 
+console.log('\nheading runaway guard');
+{
+  // Fragmented extraction: a list of titles, no prose. Every line reads as a
+  // heading, which produced cards that were all bold fragments and no content.
+  const fragments = [
+    'Judge the Work Instead of the Answer',
+    'The Cost of Being Wrong',
+    'What Frontier Labs Know',
+    'Codified Knowledge',
+    'A Shorter Path',
+  ].map((t) => ({ text: t }));
+
+  const out = C.chunk(fragments);
+  const headings = out.filter((s) => s.kind === 'heading').length;
+  check('stops trusting the heuristic when most blocks look like headings',
+    headings === 0, `${headings} of ${out.length} came back as headings`);
+  eq('every fragment is still kept', out.length, 5);
+}
+{
+  // A genuine article: one heading among real prose. The heuristic should
+  // still fire here — the guard must not disable it wholesale.
+  const blocks = [
+    { text: 'Why This Matters' },
+    { text: 'The rollout touched every service in the fleet, and the team had already burned its error budget.' },
+    { text: 'Staging it across three regions was the only option left on the table that week.' },
+    { text: 'Nobody wants to talk about the scheduler incident anymore, for reasons that are entirely fair.' },
+  ];
+  const out = C.chunk(blocks);
+  eq('a lone heading among prose is still detected', out[0].kind, 'heading');
+  check('the prose is not', out.slice(1).every((s) => s.kind === 'para'));
+}
+{
+  // Explicit types from the extractor always win over the guard.
+  const blocks = [
+    { type: 'heading', text: 'One' }, { type: 'heading', text: 'Two' },
+    { type: 'heading', text: 'Three' }, { type: 'heading', text: 'Four' },
+    { type: 'heading', text: 'Five' },
+  ];
+  const out = C.chunk(blocks);
+  check('explicit heading blocks are always honoured',
+    out.every((s) => s.kind === 'heading'));
+}
+{
+  eq('a mid-sentence fragment is never a heading',
+    C.looksLikeHeading('and then the whole thing fell over'), false);
+  eq('a real heading still is', C.looksLikeHeading('Why This Matters'), true);
+}
+
 console.log('\npacking');
 {
   const sentences = [];

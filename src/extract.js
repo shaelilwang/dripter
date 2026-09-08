@@ -21,23 +21,30 @@
       if (t) blocks.push({ type, text: t });
     };
 
-    // Prefer real semantic elements when X emits them.
-    const semantic = bodyEl.querySelectorAll('h1,h2,h3,h4,p,li,blockquote');
+    // Prefer real semantic elements when X emits them — the tag tells us
+    // outright what's a heading, with no guessing.
+    const semantic = Array.from(
+      bodyEl.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,blockquote')
+    ).filter((el) => !el.parentElement.closest('p,li,blockquote'));
+
     if (semantic.length >= 3) {
       for (const el of semantic) {
         const tag = el.tagName.toLowerCase();
-        const type = /^h[1-4]$/.test(tag) ? 'heading' : 'para';
-        const text = dom.richText(el);
-        if (tag === 'li') push('para', '• ' + text.trim());
-        else if (tag === 'blockquote') push('para', '“' + text.trim() + '”');
-        else push(type, text);
+        const text = (el.innerText || '').trim();
+        if (!text) continue;
+        if (/^h[1-6]$/.test(tag)) push('heading', text);
+        else if (tag === 'li') push('para', '• ' + text);
+        else if (tag === 'blockquote') push('para', '“' + text + '”');
+        else push('para', text);
       }
       return blocks;
     }
 
-    // Fall back to X's div-soup: split the flattened text on blank lines and
-    // let the chunker's heading heuristic sort it out.
-    const raw = dom.richText(bodyEl);
+    // Otherwise X's nested-div rich text. Use innerText, NOT our own tree
+    // walk: richText() emits a newline after every DIV, and in deeply nested
+    // markup that shatters prose into one-fragment-per-div. innerText breaks
+    // where the browser actually renders a break, which is what we want.
+    const raw = bodyEl.innerText || '';
     for (const para of raw.split(/\n+/)) push(undefined, para);
     return blocks;
   }
@@ -85,10 +92,13 @@
       return el && dom.richText(el).trim().length > 200 ? el : null;
     }, { timeout: 12000 });
 
+    let via = bodyEl ? (sel.pick('articleBody') || 'articleBody') : null;
+
     // Named selectors missed — try to find the prose structurally instead.
     if (!bodyEl) {
       await dom.autoScroll({ maxSteps: 12, settleMs: 450 });
       bodyEl = findProseFallback(1200);
+      via = bodyEl ? 'structural-fallback' : null;
       if (bodyEl) console.info('[article-drip] articleBody selectors missed; ' +
         'used the structural fallback. Run Selector Doctor here and add the ' +
         'real selector to src/selectors.js.');
@@ -102,9 +112,30 @@
 
     const titleEl = sel.q('articleTitle');
     const title = titleEl ? dom.richText(titleEl).trim().split('\n')[0] : null;
-    const blocks = blocksFromArticle(bodyEl);
+    let blocks = blocksFromArticle(bodyEl);
 
-    return { title, blocks, source: 'article' };
+    blocks = dropTitleEcho(blocks, title);
+
+    return { title, blocks, source: 'article', via };
+  }
+
+  /**
+   * Drop leading blocks that merely restate the article title.
+   *
+   * The card header already shows the title, so a body opening with it makes
+   * the very first snippet a duplicate of the line directly above it — you
+   * reach an article in the feed and the first thing it hands you is its own
+   * headline, which reads like the tool failed to find any content.
+   */
+  function dropTitleEcho(blocks, title) {
+    if (!title || !blocks || !blocks.length) return blocks || [];
+    const key = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const t = key(title);
+    if (!t) return blocks;
+
+    let i = 0;
+    while (i < blocks.length && key(blocks[i].text) === t) i++;
+    return blocks.slice(i);
   }
 
   /* ---------------------------------------------------------------- */
@@ -216,13 +247,27 @@
       return { ok: false, reason: 'body was empty after chunking' };
     }
 
+    // Record what extraction actually saw. When a card shows headings instead
+    // of prose the cause is upstream of the reader, and without this the only
+    // way to tell a bad selector from a bad chunk is to guess.
+    const headings = snippets.filter((s) => s.kind === 'heading').length;
     await store.updateItem(item.id, {
       kind,
       title: result.title || item.title,
+      debug: {
+        via: result.via || result.source,
+        blocks: result.blocks.length,
+        chars,
+        headings,
+        postCount: result.postCount || null,
+      },
     });
     await store.setSnippets(item.id, snippets);
-    return { ok: true, kind, snippets: snippets.length };
+    return { ok: true, kind, snippets: snippets.length, chars, headings };
   }
 
-  root.AD.extract = { extractInto, extractArticle, extractThread, blocksFromArticle };
+  root.AD.extract = {
+    extractInto, extractArticle, extractThread,
+    blocksFromArticle, dropTitleEcho, findProseFallback,
+  };
 })(globalThis);

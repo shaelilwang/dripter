@@ -85,6 +85,24 @@ without reloading the tab skips posts already marked `adSeen` that session, so
 it reports neither fresh nor known items. An early-stop condition requiring
 `known > 0` silently never fires there and the harvest scrolls to the bottom.
 
+**Card theme vars belong on `:root`, never on `.ad-card`.** `applyTheme()`
+samples X's live colors and writes them as inline properties on `<html>`. A
+custom property declared on `.ad-card` itself beats one inherited from an
+ancestor, so declaring the fallbacks there silently defeated all of it and the
+card rendered white on Lights-out. The fallbacks live in `:root` for that
+reason -- don't move them back.
+
+**Use `innerText` for article bodies, not `dom.richText()`.** richText emits a
+newline after every DIV; X's Article markup is deeply nested divs, so it
+shatters prose into one fragment per div. Those fragments then trip the
+chunker's heading heuristic and the reader gets a card of bold fragments with
+no content. innerText breaks where the browser actually breaks.
+
+**The chunker distrusts its own heading heuristic in bulk.** If more than half
+of the untyped blocks look like headings, it treats them all as prose --
+that ratio means the extractor handed over fragments, not a structured
+document. Explicitly typed blocks always win.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or

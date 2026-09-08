@@ -69,6 +69,7 @@
   <script src="../src/chunker.js"></script>
   <script src="../src/store.js"></script>
   <script src="../src/collect.js"></script>
+  <script src="../src/extract.js"></script>
   <script src="../src/card.js"></script>
   <script src="../src/inject.js"></script>
 
@@ -80,6 +81,8 @@
     let pass = 0, fail = 0;
 
     const section = (t) => { const h = document.createElement('h2'); h.textContent = t; out.appendChild(h); };
+    const eq2 = (name, a, b) => check(name, JSON.stringify(a) === JSON.stringify(b),
+      `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
     const check = (name, cond, detail) => {
       const d = document.createElement('div');
       d.className = 't ' + (cond ? 'ok' : 'no');
@@ -385,6 +388,53 @@
         (await store.counts()).fetchable === 4,
         String((await store.counts()).fetchable));
       await store.setSettings({ fetchScope: 'likely' });
+    }
+
+    section('article body extraction');
+    {
+      const { dropTitleEcho, blocksFromArticle } = AD.extract;
+
+      eq2('drops a title echo at the top',
+        dropTitleEcho([{text:'The Big Idea'},{text:'Real prose follows here.'}], 'The Big Idea')
+          .map(b => b.text),
+        ['Real prose follows here.']);
+      eq2('matches past punctuation and case',
+        dropTitleEcho([{text:'THE  BIG, IDEA!'},{text:'Body.'}], 'The Big Idea').map(b => b.text),
+        ['Body.']);
+      eq2('leaves a body that does not echo alone',
+        dropTitleEcho([{text:'Something else'},{text:'Body.'}], 'The Big Idea').map(b => b.text),
+        ['Something else', 'Body.']);
+      eq2('never strips a mid-article repeat',
+        dropTitleEcho([{text:'Body.'},{text:'The Big Idea'}], 'The Big Idea').map(b => b.text),
+        ['Body.', 'The Big Idea']);
+      eq2('no title is a no-op',
+        dropTitleEcho([{text:'A'},{text:'B'}], null).map(b => b.text), ['A', 'B']);
+
+      // Semantic markup: tags decide, no guessing.
+      const semantic = document.createElement('div');
+      semantic.innerHTML = '<h2>Why It Matters</h2><p>First paragraph of real prose.</p>' +
+        '<p>Second paragraph.</p><li>A bullet</li><blockquote>A quote</blockquote>';
+      const sb = blocksFromArticle(semantic);
+      eq2('headings come from the tag', sb[0], { type: 'heading', text: 'Why It Matters' });
+      check('bullets are marked', sb.some((b) => b.text.startsWith('•')));
+      check('quotes are marked', sb.some((b) => b.text.startsWith('\u201c')));
+
+      // Nested-div rich text: the case that produced all-headings cards.
+      const soup = document.createElement('div');
+      soup.innerHTML = '<div><div><span>Most evaluation regimes reward the answer ' +
+        'and ignore the path taken to reach it.</span></div></div>' +
+        '<div><div><span>That is a reasonable shortcut when work is cheap to verify.</span></div></div>';
+      document.body.appendChild(soup);
+      const db = blocksFromArticle(soup);
+      check('nested divs do not shatter into fragments', db.length <= 3,
+        `${db.length} blocks: ` + JSON.stringify(db.map((b) => b.text.slice(0, 25))));
+      check('prose survives intact',
+        db.some((b) => b.text.includes('ignore the path taken to reach it')));
+      const chunked = AD.chunker.chunk(db);
+      check('and does not come back as headings',
+        chunked.every((s) => s.kind === 'para'),
+        JSON.stringify(chunked.map((s) => s.kind)));
+      soup.remove();
     }
 
     section('incremental re-harvest');
