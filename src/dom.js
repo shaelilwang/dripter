@@ -105,7 +105,9 @@
       };
     }
     window.addEventListener('popstate', () => setTimeout(fire, 0));
-    setInterval(fire, 700); // belt and braces; X sometimes swaps views silently
+    // Belt and braces; X sometimes swaps views silently. Guarded so it stops
+    // itself if the extension is reloaded out from under this tab.
+    root.AD.life.guardedInterval(fire, 700);
   }
 
   root.AD.dom = {

@@ -152,6 +152,11 @@ Some `✕` marks are normal: `articleBody` only resolves on an Article page,
 - **Nothing harvested** — you have to be on `x.com/i/bookmarks` with the list
   visible before clicking Harvest.
 - **Harvest stops early** — keep the tab in the foreground while it scrolls.
+- **Cards fade out and say "reload tab to resume"** — you reloaded the
+  extension while that x.com tab was open. Chrome doesn't reload content
+  scripts in open tabs, so the script running there lost its connection to the
+  extension. Reload the x.com tab. (After any `chrome://extensions` reload,
+  reload your x.com tabs too.)
 
 ---
 

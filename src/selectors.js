@@ -115,6 +115,26 @@
     ],
   };
 
+  /**
+   * Where each key is expected to resolve, and which ones may legitimately
+   * find nothing anywhere.
+   *
+   * Without this the Doctor flags an Article selector as broken while you're
+   * standing on the timeline, which is exactly where it is *supposed* to find
+   * nothing — a red warning that means nothing trains you to ignore red
+   * warnings that do.
+   */
+  const META = {
+    timelineRoot:     { pages: /^\/(home)?$|^\/i\// },
+    cell:             { pages: /^\/(home)?$|^\/i\// },
+    articleBody:      { pages: /\/status\/|\/article\// , note: 'Article pages only' },
+    articleTitle:     { pages: /\/status\/|\/article\// , note: 'Article pages only' },
+    articleLink:      { optional: true, note: 'X usually omits it; articleMarker covers detection' },
+    articleMarker:    { optional: true, note: 'only present on a native Article' },
+    threadHint:       { optional: true },
+    themeProbeAccent: { optional: true },
+  };
+
   /** Resolve a selector key to the first selector string that matches. */
   function pick(key, scope) {
     const list = SEL[key];
@@ -260,7 +280,16 @@
         return { selector: s, count: n, error };
       });
       const total = variants.reduce((a, v) => a + v.count, 0);
-      report.push({ key, ok: total > 0, variants });
+      const meta = META[key] || {};
+      const relevant = !meta.optional &&
+        (!meta.pages || meta.pages.test(location.pathname));
+      report.push({
+        key, ok: total > 0, variants,
+        optional: !!meta.optional,
+        note: meta.note || null,
+        // A miss only matters on a page where this key should have resolved.
+        problem: total === 0 && relevant,
+      });
     }
     return {
       url: location.href,
@@ -268,6 +297,8 @@
       at: new Date().toISOString(),
       results: report,
       brokenKeys: report.filter((r) => !r.ok).map((r) => r.key),
+      problemKeys: report.filter((r) => r.problem).map((r) => r.key),
+      benignKeys: report.filter((r) => !r.ok && !r.problem).map((r) => r.key),
       census: census(),
     };
   }

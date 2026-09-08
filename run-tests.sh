@@ -20,7 +20,7 @@ cat <<'MSG'
 
 Injection tests need a real browser (they exercise DOM behaviour):
 
-    python3 -m http.server 8777
+    python3 tests/serve.py
     open http://localhost:8777/tests/harness.html
 
 The page title reads PASS (n) or FAIL (n).

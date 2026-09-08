@@ -296,15 +296,28 @@ async function renderDoctor() {
     out.appendChild(stale);
   }
 
-  if (lastDoctor.brokenKeys.length) {
+  const problems = lastDoctor.problemKeys || lastDoctor.brokenKeys || [];
+  const benign = lastDoctor.benignKeys || [];
+
+  if (problems.length) {
     const warn = document.createElement('div');
     warn.className = 'notice err';
     warn.style.marginBottom = '10px';
-    warn.textContent = `No match on this page: ${lastDoctor.brokenKeys.join(', ')}. ` +
-      'Some of those are expected off their own page (article selectors only ' +
-      'resolve on an Article). Anything broken on the page it belongs to needs ' +
-      'a fix in src/selectors.js.';
+    warn.textContent =
+      `Broken on a page where they should work: ${problems.join(', ')}. ` +
+      'Fix these in src/selectors.js — add a working selector to the front of ' +
+      "that key's list.";
     out.appendChild(warn);
+  } else {
+    const ok = document.createElement('div');
+    ok.className = 'notice ok';
+    ok.style.marginBottom = '10px';
+    ok.textContent = benign.length
+      ? `Everything this page should have is resolving. ${benign.length} ` +
+        `selector${benign.length === 1 ? '' : 's'} found nothing, all of which ` +
+        `belong to other pages or are optional: ${benign.join(', ')}.`
+      : 'Every selector resolved on this page.';
+    out.appendChild(ok);
   }
 
   for (const r of lastDoctor.results) {
@@ -312,8 +325,9 @@ async function renderDoctor() {
     line.className = 'dline';
     const k = document.createElement('span');
     k.className = 'dkey';
-    k.textContent = (r.ok ? '✓ ' : '✕ ') + r.key;
-    k.style.color = r.ok ? 'var(--good)' : 'var(--bad)';
+    k.textContent = (r.ok ? '✓ ' : r.problem ? '✕ ' : '– ') + r.key;
+    k.style.color = r.ok ? 'var(--good)' : r.problem ? 'var(--bad)' : 'var(--muted)';
+    if (r.note) k.title = r.note;
     const v = document.createElement('span');
     v.className = 'mono muted grow truncate';
     v.textContent = r.variants.map((x) => `${x.count}× ${x.selector}`).join('   |   ');

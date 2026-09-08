@@ -229,6 +229,9 @@
 /* ---- states ---- */
 
 .ad-card.is-advancing .ad-text { opacity: 0.25; transition: opacity 90ms ease; }
+.ad-card.is-stale { opacity: 0.5; }
+.ad-card.is-stale .ad-badge { color: var(--ad-muted); font-weight: 400; }
+.ad-card.is-stale button { cursor: default; }
 .ad-card.is-empty .ad-text { color: var(--ad-muted); }
 .ad-card.is-empty .ad-foot { display: none; }
 

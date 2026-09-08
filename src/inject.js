@@ -15,7 +15,7 @@
  */
 ;(function (root) {
   root.AD = root.AD || {};
-  const { sel, dom, store, card } = root.AD;
+  const { sel, dom, store, card, life } = root.AD;
 
   const CARD_SELECTOR = '[data-ad-card]';
 
@@ -60,6 +60,7 @@
 
   async function sweep() {
     if (sweeping) { dirty = true; return; }
+    if (!life.check()) return;
     sweeping = true;
 
     try {
@@ -103,7 +104,10 @@
         card.track(node);
       }
     } catch (e) {
-      console.warn('[article-drip] sweep failed', e);
+      // An orphaned content script (extension reloaded under us) would throw
+      // here on every mutation forever. Stop once, quietly.
+      if (life.isContextError(e)) life.teardown('the extension was reloaded');
+      else console.warn('[article-drip] sweep failed', e);
     } finally {
       sweeping = false;
       if (dirty) { dirty = false; setTimeout(sweep, 60); }
@@ -125,6 +129,7 @@
   function startObserving() {
     if (observer) return;
     observer = new MutationObserver((records) => {
+      if (!life.check()) return;
       for (const r of records) {
         // Ignore mutations we caused ourselves.
         const ours = [...r.addedNodes, ...r.removedNodes].some(
@@ -140,6 +145,19 @@
     if (!observer) return;
     observer.disconnect();
     observer = null;
+  }
+
+  /**
+   * Leave the cards in place but make it obvious they're inert, rather than
+   * offering buttons that quietly do nothing.
+   */
+  function markCardsStale() {
+    for (const n of document.querySelectorAll(CARD_SELECTOR)) {
+      n.classList.add('is-stale');
+      for (const b of n.querySelectorAll('button')) b.disabled = true;
+      const badge = n.querySelector('.ad-badge');
+      if (badge) badge.textContent = 'reload tab to resume';
+    }
   }
 
   /** Drop every card we've placed — used when you toggle the drip off. */
@@ -181,6 +199,15 @@
       else if (changes.items) schedule();
     });
   }
+
+  // Registered at load rather than inside start(): if the extension is
+  // reloaded before or during startup, the cards still need marking and the
+  // observers still need dropping.
+  life.onTeardown(() => {
+    stopObserving();
+    clearTimeout(debounce);
+    markCardsStale();
+  });
 
   root.AD.inject = {
     start, sweep, clearCards, refreshSettings,

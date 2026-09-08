@@ -12,8 +12,12 @@ the feature.
 
 ```bash
 ./run-tests.sh                       # node suites: chunker + store
-python3 -m http.server 8777          # then open /tests/harness.html for the
-                                     # injection tests (needs a real browser)
+python3 tests/serve.py               # then open /tests/harness.html for the
+                                     # injection tests (needs a real browser).
+                                     # Use this, not `python -m http.server`:
+                                     # that one lets the browser heuristically
+                                     # cache src/*.js, so you end up testing
+                                     # code you already changed.
 ```
 
 The harness shims `chrome.*` in-page and builds a fake timeline matching
@@ -121,6 +125,16 @@ each bullet against the opening sentence and space the whole list out.
 
 **Extracted blocks are stored on the item** so `rechunkAll()` can re-split
 after a settings change without re-opening every article in a browser tab.
+
+**Content scripts outlive the extension that injected them.** Reloading or
+updating the extension does NOT reload content scripts in open tabs; theirs
+keep running with a severed bridge, and every chrome.* call throws "Extension
+context invalidated". `src/lifecycle.js` detects that (chrome.runtime.id goes
+undefined), tears down once, and marks the on-screen cards stale. Anything new
+that polls, observes, or touches chrome.* on a timer must register with
+`life.onTeardown()` or use `life.guardedInterval()`, or it will spin forever in
+an orphaned tab. Register at module load, not inside start() — teardown can
+happen before startup finishes.
 
 ## Scope boundaries the user set
 

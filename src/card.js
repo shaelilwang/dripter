@@ -6,7 +6,7 @@
  */
 ;(function (root) {
   root.AD = root.AD || {};
-  const { dom, sel, store } = root.AD;
+  const { dom, sel, store, life } = root.AD;
 
   /* ---------------------------------------------------------------- */
   /* theme sampling                                                    */
@@ -112,6 +112,7 @@
       clampObserver = new ResizeObserver((entries) => {
         for (const e of entries) updateClamp(e.target.closest('.ad-card'));
       });
+      life.onTeardown(() => { clampObserver.disconnect(); clampObserver = null; });
     }
     clampObserver.observe(textEl);
   }
@@ -293,6 +294,7 @@
   async function onClick(ev) {
     const btn = ev.target.closest('button[data-ad-act]');
     if (!btn) return;
+    if (!life.check()) return;
     ev.preventDefault();
     ev.stopPropagation(); // don't let X treat this as a click on the feed
 
@@ -359,6 +361,7 @@
         }
       }
     }, { threshold: [0, 0.6, 1] });
+    life.onTeardown(() => { observer.disconnect(); observer = null; });
   }
 
   function track(card) {

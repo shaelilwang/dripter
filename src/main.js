@@ -94,7 +94,7 @@
     (async () => {
       const settings = await store.getSettings();
       const tick = () => collect.harvestVisible(settings).catch(() => {});
-      setInterval(tick, 1500);
+      root.AD.life.guardedInterval(tick, 1500);
       tick();
     })();
   }

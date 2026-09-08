@@ -54,6 +54,7 @@
           onChanged: { addListener: (f) => listeners.push(f) },
         },
         runtime: {
+          id: 'harness',
           sendMessage() { return Promise.resolve(); },
           onMessage: { addListener() {} },
           getManifest: () => ({ version: 'harness' }),
@@ -64,6 +65,7 @@
     })();
   </script>
 
+  <script src="../src/lifecycle.js"></script>
   <script src="../src/selectors.js"></script>
   <script src="../src/dom.js"></script>
   <script src="../src/chunker.js"></script>
@@ -540,6 +542,57 @@
 
       AD.dom.autoScroll = origScroll;
       await store.setSettings({ incrementalHarvest: true });
+    }
+
+    // MUST be last: teardown is one-shot and global, so everything after it
+    // would be running against a dead context.
+    section('orphaned content script');
+    {
+      const { life } = AD;
+
+      check('recognises the real Chrome message',
+        life.isContextError(new Error('Extension context invalidated.')));
+      check('and the messaging variants',
+        life.isContextError(new Error('Could not establish connection. Receiving end does not exist.')));
+      check('but not an ordinary bug',
+        !life.isContextError(new TypeError('x.foo is not a function')));
+
+      let ticks = 0;
+      life.guardedInterval(() => { ticks++; }, 10);
+      let cleaned = false;
+      life.onTeardown(() => { cleaned = true; });
+
+      // Put a live card on screen so we can watch it get marked inert.
+      await fresh(6, 5, { everyNPosts: 3 });
+      inject._resetLayout(); AD.card.releaseAll();
+      await inject.sweep();
+      const before = cards().length;
+      check('a card is on screen to begin with', before > 0, String(before));
+
+      check('still alive before the extension goes away', life.isAlive());
+      chrome.runtime.id = undefined;            // simulate the reload
+      check('check() notices and returns false', life.check() === false);
+      check('registered cleanups ran', cleaned);
+
+      const stale = cards();
+      check('cards are left in place, not yanked out',
+        stale.length === before, `${before} then ${stale.length}`);
+      check('but marked stale', stale.every((c) => c.classList.contains('is-stale')));
+      check('with their buttons disabled',
+        stale.every((c) => [...c.querySelectorAll('button')].every((b) => b.disabled)));
+      check('and a note telling you what to do',
+        stale[0].querySelector('.ad-badge').textContent === 'reload tab to resume');
+
+      const at = ticks;
+      await new Promise((r) => setTimeout(r, 60));
+      check('guarded intervals stopped', ticks === at, `${at} then ${ticks}`);
+
+      await inject.sweep();
+      check('sweeping after teardown is a no-op, not a throw',
+        cards().length === before);
+      check('teardown is idempotent', (life.teardown('again'), true));
+
+      chrome.runtime.id = 'harness';            // restore for anything later
     }
 
     /* ---------------------------------------------------------------- */

@@ -3,8 +3,15 @@
   "name": "Article Drip",
   "version": "0.1.0",
   "description": "Drips your saved X Articles and threads into your For You feed as tweet-sized snippets, so you actually read them.",
-  "permissions": ["storage", "unlimitedStorage", "tabs"],
-  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*"
+  ],
   "background": {
     "service_worker": "src/background.js"
   },
@@ -15,8 +22,12 @@
   "options_page": "ui/options.html",
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
       "js": [
+        "src/lifecycle.js",
         "src/selectors.js",
         "src/dom.js",
         "src/chunker.js",
@@ -27,7 +38,9 @@
         "src/inject.js",
         "src/main.js"
       ],
-      "css": ["src/card.css"],
+      "css": [
+        "src/card.css"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
