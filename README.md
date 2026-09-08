@@ -69,7 +69,32 @@ and the on/off switch.
 | What to open when fetching | Likely only | "Everything" opens every bookmark to find Articles disguised as plain posts |
 
 The library lists every article with a progress bar, and lets you restart,
-finish, or remove any of them.
+finish, or remove any of them individually.
+
+**Bulk actions** act on whatever the state filter above them is showing —
+select `reading` and "Mark read" retires only those:
+
+| Button | What it does |
+|---|---|
+| Mark all read | Retires them so they stop appearing in your feed. Nothing is deleted. |
+| Retry failed | Puts failed extractions back in the queue for the next fetch. |
+| Remove finished | Drops finished articles from the library entirely. |
+
+### Nothing gets re-done
+
+- **Re-harvesting never rewinds you.** Re-seeing a bookmark refreshes its title
+  and author only — state, snippets and reading position are left alone.
+- **Fetching never re-fetches.** The job only picks up `pending` items, so
+  anything already read is skipped.
+- **Re-harvests stop early.** Bookmarks are newest-first, so once three
+  screenfuls in a row turn up nothing new, the scroll stops rather than
+  re-reading your whole backlog. Turn this off under "What to collect" if you
+  ever need a full re-scan.
+
+Snippets also clear themselves as you read: a card that stays on screen for
+900 ms counts as read and the article advances. That's the "count as read
+after" setting, and the switch above it turns it off if you'd rather only
+advance by pressing **Next ›**.
 
 **Card buttons** — `Later` moves to a different article without consuming the
 snippet, `Done` retires the article, `Open` opens the original, `Next ›` marks
@@ -118,8 +143,9 @@ Some `✕` marks are normal: `articleBody` only resolves on an Article page,
 
 - **No cards in the feed** — check the popup switch is on and "snippets left"
   is above zero. If it's zero, you need a Fetch.
-- **Fetch keeps failing** — X was probably still rendering. Re-run it; failed
-  items are retried. Check the library filter `failed` to see what didn't land.
+- **Fetch keeps failing** — X was probably still rendering. Failed items are
+  *not* retried automatically; the fetch job only looks at `pending`. Use
+  **Retry failed** in the library to requeue them, then fetch again.
 - **Nothing harvested** — you have to be on `x.com/i/bookmarks` with the list
   visible before clicking Harvest.
 - **Harvest stops early** — keep the tab in the foreground while it scrolls.

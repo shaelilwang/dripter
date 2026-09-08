@@ -75,6 +75,16 @@ makes out-of-order consumption safe by repeating a snippet rather than skipping
 one. For a reading tool, repeating is the correct failure direction. Don't
 "fix" it into an unconditional `cursor = index + 1`.
 
+**Storage writes are whole-object.** `chrome.storage.local.set({items})`
+rewrites the entire library every call, so per-item writes in a loop are
+O(n^2). `upsertMany()` exists for that reason -- harvest batches a screenful
+into one read/write. Don't reintroduce a per-item `upsertItem` inside a loop.
+
+**Harvest's early stop keys on `scanned`, not `known`.** Re-running a harvest
+without reloading the tab skips posts already marked `adSeen` that session, so
+it reports neither fresh nor known items. An early-stop condition requiring
+`known > 0` silently never fires there and the harvest scrolls to the bottom.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or

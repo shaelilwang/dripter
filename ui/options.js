@@ -3,7 +3,7 @@ const store = globalThis.AD.store;
 const $ = (id) => document.getElementById(id);
 
 const NUMBERS = ['everyNPosts', 'maxChars', 'dwellMs', 'minThreadPosts', 'minPostChars'];
-const FLAGS = ['markReadOnView', 'includeArticles', 'includeThreads'];
+const FLAGS = ['markReadOnView', 'includeArticles', 'includeThreads', 'incrementalHarvest'];
 const SELECTS = ['order', 'fetchScope'];
 
 let filter = 'all';
@@ -134,6 +134,13 @@ async function renderLibrary() {
   const [items, counts] = await Promise.all([store.getItems(), store.counts()]);
   renderFilters(counts);
 
+  // Bulk buttons act on whatever the filter is currently showing, so say so.
+  const scope = filter === 'all' ? 'everything' : `the ${filter} ones`;
+  $('bulk-hint').textContent = `acts on ${scope}`;
+  $('bulk-done').textContent = filter === 'all' ? 'Mark all read' : `Mark ${filter} read`;
+  $('bulk-retry').disabled = (counts.failed || 0) === 0;
+  $('bulk-remove').disabled = (counts.done || 0) === 0;
+
   const list = Object.values(items)
     .filter((it) => filter === 'all' || it.state === filter)
     .sort((a, b) => {
@@ -157,6 +164,30 @@ async function renderLibrary() {
   }
   for (const it of list) wrap.appendChild(itemRow(it));
 }
+
+/* ------------------------------------------------------------------ */
+/* bulk actions                                                        */
+/* ------------------------------------------------------------------ */
+
+$('bulk-done').addEventListener('click', async () => {
+  const label = filter === 'all' ? 'every article' : `every "${filter}" article`;
+  if (!confirm(`Mark ${label} as read? They stop appearing in your feed. Nothing is deleted.`)) return;
+  say(`Marked ${await store.markManyDone(filter)} as read.`, 'ok');
+  renderLibrary();
+});
+
+$('bulk-retry').addEventListener('click', async () => {
+  const n = await store.retryFailed();
+  say(n ? `${n} queued for another attempt — run "Fetch article bodies" again.`
+        : 'Nothing failed.', 'ok');
+  renderLibrary();
+});
+
+$('bulk-remove').addEventListener('click', async () => {
+  if (!confirm('Remove finished articles from the library? They can be harvested again later.')) return;
+  say(`Removed ${await store.removeMany('done')}.`, 'ok');
+  renderLibrary();
+});
 
 /* ------------------------------------------------------------------ */
 /* import / export                                                     */

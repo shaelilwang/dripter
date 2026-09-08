@@ -34,13 +34,14 @@
    * Scroll to the bottom repeatedly until nothing new loads.
    * onStep runs after each scroll so callers can harvest incrementally.
    */
-  async function autoScroll({ maxSteps = 60, settleMs = 800, onStep } = {}) {
+  async function autoScroll({ maxSteps = 60, settleMs = 800, onStep, shouldStop } = {}) {
     let lastHeight = -1;
     let stagnant = 0;
     for (let step = 0; step < maxSteps; step++) {
       if (onStep) {
         try { await onStep(step); } catch (e) { console.warn('[article-drip] onStep', e); }
       }
+      if (shouldStop && shouldStop()) break;
       window.scrollTo(0, document.documentElement.scrollHeight);
       await sleep(settleMs);
       const h = document.documentElement.scrollHeight;

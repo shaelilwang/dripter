@@ -387,6 +387,56 @@
       await store.setSettings({ fetchScope: 'likely' });
     }
 
+    section('incremental re-harvest');
+    {
+      // A second harvest over unchanged bookmarks must stop scrolling instead
+      // of re-reading the whole backlog.
+      let steps = 0;
+      const origScroll = AD.dom.autoScroll;
+      AD.dom.autoScroll = async (opts) => {
+        // Stand in for a long list: always "loads more", never runs out.
+        for (let i = 0; i < 20; i++) {
+          steps++;
+          await opts.onStep(i);
+          if (opts.shouldStop && opts.shouldStop()) break;
+        }
+        if (opts.onStep) await opts.onStep(-1);
+      };
+
+      await store.setSettings({ incrementalHarvest: true });
+
+      // Case 1: fresh page load — adSeen marks are gone, so every post is
+      // re-read and recognised as already known.
+      for (const t of document.querySelectorAll('[data-testid="tweet"]')) {
+        delete t.dataset.adSeen;
+      }
+      steps = 0;
+      const reloaded = await AD.collect.harvestAll();
+      check('after a reload, stops early on familiar bookmarks',
+        reloaded.stoppedEarly === true, JSON.stringify(reloaded));
+      check('and does so within a few screenfuls', steps <= 5, `${steps} steps`);
+      check('reports nothing new', reloaded.found === 0, String(reloaded.found));
+      check('but does report what it recognised',
+        reloaded.revisited > 0, String(reloaded.revisited));
+
+      // Case 2: re-run in the same tab — adSeen suppresses every post, so the
+      // harvest sees neither fresh nor known. It must still stop.
+      steps = 0;
+      const sameSession = await AD.collect.harvestAll();
+      check('re-running in the same tab also stops early',
+        sameSession.stoppedEarly === true, JSON.stringify(sameSession));
+      check('without scrolling the whole list', steps <= 5, `${steps} steps`);
+
+      await store.setSettings({ incrementalHarvest: false });
+      steps = 0;
+      const full = await AD.collect.harvestAll();
+      check('full re-scan keeps going when the setting is off',
+        full.stoppedEarly === false && steps === 20, `${steps} steps`);
+
+      AD.dom.autoScroll = origScroll;
+      await store.setSettings({ incrementalHarvest: true });
+    }
+
     /* ---------------------------------------------------------------- */
     const sum = document.createElement('div');
     sum.id = 'summary';

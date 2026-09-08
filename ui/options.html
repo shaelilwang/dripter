@@ -94,8 +94,19 @@
     <input type="number" id="minThreadPosts" min="1" max="50" step="1"> posts
   </label>
 
+  <label class="switch" style="display:flex;margin-bottom:10px">
+    <input type="checkbox" id="incrementalHarvest"><span class="track"></span>
+    <span>Stop re-harvests early once they reach bookmarks I already have</span>
+  </label>
+
   <h2>Library <span id="lib-count" class="muted small" style="text-transform:none;letter-spacing:0"></span></h2>
   <div class="filters" id="filters"></div>
+  <div class="panel io" style="margin-bottom:10px">
+    <button id="bulk-done" class="tiny">Mark all read</button>
+    <button id="bulk-retry" class="tiny">Retry failed</button>
+    <button id="bulk-remove" class="tiny danger">Remove finished</button>
+    <span class="small muted" id="bulk-hint"></span>
+  </div>
   <div class="items" id="items"></div>
 
   <h2>Move between machines</h2>

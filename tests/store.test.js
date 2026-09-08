@@ -146,6 +146,63 @@ async function main() {
   eq('snippets survive a re-harvest', it.snippets.length, 5);
   eq('title refreshes', it.title, 'Re-harvested');
 
+  console.log('\nbatch upsert');
+  reset();
+  {
+    const mk = (id) => ({ id, url: 'u', kind: 'post', title: 'T' + id, likely: true });
+    let r = await store.upsertMany([mk('a'), mk('b'), mk('c')]);
+    eq('all new on first pass', r.fresh.length, 3);
+    eq('none known on first pass', r.known.length, 0);
+
+    r = await store.upsertMany([mk('b'), mk('c'), mk('d')]);
+    eq('re-seen ids report as known', r.known.sort(), ['b', 'c']);
+    eq('only the new one is fresh', r.fresh, ['d']);
+    eq('library has four', Object.keys(await store.getItems()).length, 4);
+
+    eq('empty batch touches nothing',
+      await store.upsertMany([]), { fresh: [], known: [] });
+  }
+
+  console.log('\nre-harvest never rewinds');
+  reset();
+  await seed('800', 5);
+  await store.consume('800', 0);
+  await store.consume('800', 1);
+  await store.upsertMany([{ id: '800', url: 'u', kind: 'article', title: 'Seen again' }]);
+  {
+    const it = await store.getItem('800');
+    eq('cursor untouched', it.cursor, 2);
+    eq('state untouched', it.state, 'reading');
+    eq('snippets untouched', it.snippets.length, 5);
+    eq('a fetched item is never pushed back into the queue',
+      (await store.counts()).pending, 0);
+  }
+
+  console.log('\nbulk operations');
+  reset();
+  await seed('901', 3);
+  await seed('902', 3);
+  await store.upsertItem({ id: '903', url: 'u', kind: 'post', title: 'never fetched' });
+  await store.updateItem('902', { state: 'failed' });
+  await store.consume('901', 0);
+
+  eq('retryFailed requeues', await store.retryFailed(), 1);
+  eq('and it lands in pending', (await store.getItem('902')).state, 'pending');
+  eq('retry clears the stale snippets', (await store.getItem('902')).snippets.length, 0);
+  eq('nothing to retry the second time', await store.retryFailed(), 0);
+
+  eq('markManyDone by state only hits that state',
+    await store.markManyDone('reading'), 1);
+  eq('the reading one is done', (await store.getItem('901')).state, 'done');
+  eq('the pending one is untouched', (await store.getItem('902')).state, 'pending');
+
+  eq('markManyDone("all") sweeps the rest', await store.markManyDone('all'), 2);
+  eq('already-done items are not recounted', await store.markManyDone('all'), 0);
+  eq('nothing is offered afterwards', await store.peekNext(), null);
+
+  eq('removeMany drops finished', await store.removeMany('done'), 3);
+  eq('library is empty', (await store.counts()).total, 0);
+
   console.log('\nexport / import');
   reset();
   await seed('700', 5);

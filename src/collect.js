@@ -97,10 +97,15 @@
     return 'post';
   }
 
-  /** Read every bookmark currently rendered and upsert it. */
+  /**
+   * Read every bookmark currently rendered and upsert them in one batch.
+   * Returns { fresh, known } ids so the caller can tell new material from
+   * ground it has already covered.
+   */
   async function harvestVisible(settings) {
-    const seen = [];
-    for (const tweetEl of sel.qa('tweet')) {
+    const batch = [];
+    const rendered = sel.qa('tweet');
+    for (const tweetEl of rendered) {
       if (tweetEl.dataset.adSeen === '1') continue;
 
       const link = permalinkOf(tweetEl);
@@ -131,7 +136,7 @@
         firstLineAsTitle(text) ||
         `${author.name || '@' + link.handle}${kind === 'thread' ? ' — thread' : ''}`;
 
-      await root.AD.store.upsertItem({
+      batch.push({
         id: link.id,
         url: kind === 'article' && articleLink ? articleLink.url : link.url,
         statusUrl: link.url,
@@ -143,9 +148,15 @@
       });
 
       tweetEl.dataset.adSeen = '1';
-      seen.push(link.id);
     }
-    return seen;
+
+    // One read/write for the whole batch, not one per bookmark.
+    // `scanned` counts every rendered post including ones already marked
+    // adSeen this session — the caller needs to distinguish "nothing new
+    // here" from "the page hasn't rendered anything yet".
+    const result = await root.AD.store.upsertMany(batch);
+    result.scanned = rendered.length;
+    return result;
   }
 
   function articleTitleFromCard(tweetEl) {
@@ -179,19 +190,44 @@
       );
     }
 
+    const revisited = new Set();
+    let quietSteps = 0;
+    let stoppedEarly = false;
+
     const startY = window.scrollY;
     await dom.autoScroll({
       maxSteps: 80,
       settleMs: 750,
+      shouldStop: () => stoppedEarly,
       onStep: async (step) => {
-        for (const id of await harvestVisible(settings)) found.add(id);
-        if (onProgress) onProgress({ found: found.size, step });
+        const { fresh, known, scanned } = await harvestVisible(settings);
+        fresh.forEach((id) => found.add(id));
+        known.forEach((id) => revisited.add(id));
+
+        // Bookmarks are newest-first, so anything we already hold sits below
+        // anything new. Once a few screenfuls in a row turn up nothing new
+        // we've reached the part of the list we already have — scrolling on
+        // would just re-read the whole backlog for nothing.
+        //
+        // Keyed on `scanned`, not on `known`: re-running a harvest without
+        // reloading the tab skips posts already marked this session, so it
+        // reports neither fresh nor known. Requiring `known` there meant the
+        // second run scrolled to the very bottom and stopped nothing.
+        if (settings.incrementalHarvest && step >= 0) {
+          if (fresh.length) quietSteps = 0;
+          else if (scanned > 0) quietSteps++;
+          if (quietSteps >= 3) stoppedEarly = true;
+        }
+
+        if (onProgress) {
+          onProgress({ found: found.size, revisited: revisited.size, step });
+        }
       },
     });
     window.scrollTo(0, startY);
 
     await root.AD.store.bumpStats({ lastHarvest: Date.now() });
-    return { found: found.size };
+    return { found: found.size, revisited: revisited.size, stoppedEarly };
   }
 
   root.AD.collect = { harvestAll, harvestVisible, permalinkOf, authorOf };

@@ -43,6 +43,8 @@
     // 'all' visits every bookmark, which is slower but catches Articles that
     // are indistinguishable from ordinary posts until you open them.
     fetchScope: 'likely',
+    // Stop scrolling a re-harvest once we reach bookmarks we already hold.
+    incrementalHarvest: true,
   };
 
   const DEFAULT_STATS = { snippetsRead: 0, articlesFinished: 0, lastHarvest: null };
@@ -89,20 +91,10 @@
     return (await getItems())[id] || null;
   }
 
-  /** Insert if new; refresh cheap metadata if we've seen it before. */
-  async function upsertItem(item) {
-    const items = await getItems();
-    const prev = items[item.id];
-    if (prev) {
-      items[item.id] = Object.assign({}, prev, {
-        title: item.title || prev.title,
-        author: item.author || prev.author,
-        preview: item.preview || prev.preview,
-        kind: prev.kind === 'post' ? (item.kind || prev.kind) : prev.kind,
-        lastSeenAt: Date.now(),
-      });
-    } else {
-      items[item.id] = Object.assign({
+  /** Merge one harvested record over whatever we already hold. */
+  function mergeItem(prev, item) {
+    if (!prev) {
+      return Object.assign({
         state: 'pending',
         snippets: [],
         cursor: 0,
@@ -110,8 +102,46 @@
         lastSeenAt: Date.now(),
       }, item);
     }
+    // Never touch state / snippets / cursor here: a re-harvest must not undo
+    // reading progress or push a fetched article back into the queue.
+    return Object.assign({}, prev, {
+      title: item.title || prev.title,
+      author: item.author || prev.author,
+      preview: item.preview || prev.preview,
+      kind: prev.kind === 'post' ? (item.kind || prev.kind) : prev.kind,
+      likely: prev.likely === true ? true : (item.likely ?? prev.likely),
+      lastSeenAt: Date.now(),
+    });
+  }
+
+  /**
+   * Upsert a batch in a single read/write.
+   *
+   * Doing this per item meant rewriting the whole items object once per
+   * bookmark -- O(n^2) storage writes across a harvest, which is what made
+   * re-running one feel like it was redoing all the work.
+   *
+   * Returns which ids were new vs. already known, so the harvester can tell
+   * when it has scrolled back into territory it already has.
+   */
+  async function upsertMany(list) {
+    const fresh = [];
+    const known = [];
+    if (!list || !list.length) return { fresh, known };
+
+    const items = await getItems();
+    for (const item of list) {
+      (items[item.id] ? known : fresh).push(item.id);
+      items[item.id] = mergeItem(items[item.id], item);
+    }
     await set({ items });
-    return items[item.id];
+    return { fresh, known };
+  }
+
+  /** Insert if new; refresh cheap metadata if we've seen it before. */
+  async function upsertItem(item) {
+    await upsertMany([item]);
+    return getItem(item.id);
   }
 
   async function updateItem(id, patch) {
@@ -206,6 +236,53 @@
     return updateItem(id, { state: 'done' });
   }
 
+  /* ---- bulk operations: one read, one write, whatever the size ---- */
+
+  const matches = (it, state) => !state || state === 'all' || it.state === state;
+
+  /** Retire everything in `state` (or everything, if omitted). */
+  async function markManyDone(state) {
+    const items = await getItems();
+    let n = 0;
+    for (const it of Object.values(items)) {
+      if (it.state === 'done' || !matches(it, state)) continue;
+      items[it.id] = Object.assign({}, it, { state: 'done' });
+      n++;
+    }
+    if (n) await set({ items });
+    return n;
+  }
+
+  /**
+   * Put failed items back in the fetch queue. Without this a transient
+   * extraction failure stranded an article permanently -- the fetch job only
+   * ever looks at 'pending', so nothing would retry it.
+   */
+  async function retryFailed() {
+    const items = await getItems();
+    let n = 0;
+    for (const it of Object.values(items)) {
+      if (it.state !== 'failed') continue;
+      items[it.id] = Object.assign({}, it, { state: 'pending', snippets: [], cursor: 0 });
+      n++;
+    }
+    if (n) await set({ items });
+    return n;
+  }
+
+  /** Drop everything in `state` from the library entirely. */
+  async function removeMany(state) {
+    const items = await getItems();
+    let n = 0;
+    for (const it of Object.values(items)) {
+      if (!matches(it, state)) continue;
+      delete items[it.id];
+      n++;
+    }
+    if (n) await set({ items });
+    return n;
+  }
+
   async function counts() {
     const items = Object.values(await getItems());
     const c = {
@@ -254,8 +331,9 @@
     get, set,
     getSettings, setSettings,
     getStats, bumpStats,
-    getItems, getItem, upsertItem, updateItem, removeItem,
+    getItems, getItem, upsertItem, upsertMany, updateItem, removeItem,
     setSnippets, peekNext, consume, resetItem, markDone,
+    markManyDone, retryFailed, removeMany,
     counts, exportAll, importAll,
   };
 

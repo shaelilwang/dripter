@@ -111,7 +111,11 @@ $('harvest').addEventListener('click', async () => {
 
   if (!res) say('No response from the page. Reload x.com and try again.', 'err');
   else if (!res.ok) say(res.error || 'Harvest failed.', 'err');
-  else say(`Found ${res.found} article${res.found === 1 ? '' : 's'} and thread${res.found === 1 ? '' : 's'}.`, 'ok');
+  else {
+    const bits = [`${res.found} new`];
+    if (res.revisited) bits.push(`${res.revisited} already had`);
+    say(bits.join(', ') + (res.stoppedEarly ? ' — stopped once it reached ones you already had.' : '.'), 'ok');
+  }
 
   refresh();
 });
@@ -181,7 +185,8 @@ function pollJob() {
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'AD_HARVEST_PROGRESS') {
-    say(`Scrolling… ${msg.found} found so far.`);
+    say(`Scrolling… ${msg.found} new` +
+        (msg.revisited ? `, ${msg.revisited} already had.` : ' so far.'));
   }
 });
 
