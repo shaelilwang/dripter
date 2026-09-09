@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Article Drip",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Drips your saved X Articles and threads into your For You feed as tweet-sized snippets, so you actually read them.",
   "permissions": [
     "storage",

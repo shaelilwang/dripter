@@ -44,6 +44,14 @@ though anything goes at call time.
 
 ## Things that will bite you
 
+**Read the title BEFORE scrolling.** `extractArticle` rides to the bottom so
+lazy content renders, and X unmounts the article header once you scroll past
+it — so a title read after that scroll is gone. This produced a genuinely
+confusing split: "Diagnose", which measures the page as-is, reported the
+correct title while extraction on the same page with the same code stored the
+author's name. Anything read from ABOVE the body must be captured before the
+scroll. `debug.titleVia` records which read won.
+
 **X mixes testid casing.** The Article body is `twitterArticleRichTextView`
 (camelCase); the Article title is `twitter-article-title` (hyphenated). Both
 confirmed live. Guessing one convention from the other is what hid the title

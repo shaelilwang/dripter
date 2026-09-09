@@ -81,12 +81,20 @@
 
           const res = await extract.extractInto(item);
           const after = await store.getItem(id);
-          return {
+          const outcome = {
             extracted: res,
             title: after && after.title,
             snippets: after ? (after.snippets || []).length : 0,
             state: after && after.state,
           };
+
+          // Reading a page takes ~15s, and the popup closes the moment you
+          // click anything — which loses the reply and makes a run that
+          // worked look like one that did nothing. Leave the result behind.
+          await store.set({
+            lastReread: Object.assign({ id, at: Date.now() }, outcome),
+          });
+          return outcome;
         })());
         return true;
 

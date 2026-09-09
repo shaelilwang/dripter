@@ -689,6 +689,35 @@
       col.remove();
     }
 
+    section('title survives the scroll');
+    {
+      // X unmounts the article header once you scroll past it. Extraction
+      // rides to the bottom before reading blocks, so a title read at that
+      // point is gone — which is why Diagnose (no scroll) kept reporting the
+      // right title while extraction stored the author's name.
+      const col = document.createElement('div');
+      col.setAttribute('data-testid', 'primaryColumn');
+      col.innerHTML =
+        '<div data-testid="twitter-article-title" style="font-size:34px">' +
+          'The Real Title</div>' +
+        '<div data-testid="twitterArticleRichTextView">' +
+          '<div>Body prose that carries the article along.</div>' +
+        '</div>';
+      document.body.appendChild(col);
+      const bodyEl = col.querySelector('[data-testid="twitterArticleRichTextView"]');
+
+      const before = AD.extract.articleTitleFor(bodyEl, []);
+      eq2('the title is readable before scrolling', before, 'The Real Title');
+
+      // Simulate the header being unmounted, as scrolling away does.
+      col.querySelector('[data-testid="twitter-article-title"]').remove();
+      const after = AD.extract.articleTitleFor(bodyEl, AD.extract.blocksFromArticle(bodyEl));
+      eq2('and gone afterwards', after, null);
+      check('so the early read is the one that must be kept',
+        (before || after) === 'The Real Title');
+      col.remove();
+    }
+
     section('confirmed title selector');
     {
       // data-testid="twitter-article-title" is confirmed live. It sits OUTSIDE

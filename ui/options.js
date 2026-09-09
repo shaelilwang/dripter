@@ -437,8 +437,36 @@ async function renderDiagnosis() {
   const head = document.createElement('div');
   head.className = 'small muted';
   head.style.marginBottom = '8px';
-  head.textContent = `${lastDiagnosis.path} · ${new Date(lastDiagnosis.at).toLocaleString()}`;
+  head.textContent = `${lastDiagnosis.path} · ${new Date(lastDiagnosis.at).toLocaleString()}` +
+    (lastDiagnosis.extensionVersion ? ` · built from v${lastDiagnosis.extensionVersion}` : '');
   out.appendChild(head);
+
+  /*
+   * A stale report reads exactly like a fresh one. This page is reached from
+   * a button that just ran a diagnosis, so an old report sitting here means
+   * the run didn't happen — and every conclusion drawn from it is about code
+   * that has since changed. Say so before the numbers.
+   */
+  const ageMin = Math.round((Date.now() - new Date(lastDiagnosis.at).getTime()) / 60000);
+  const running = chrome.runtime.getManifest().version;
+  const staleBuild = lastDiagnosis.extensionVersion &&
+    lastDiagnosis.extensionVersion !== running;
+
+  if (ageMin > 3 || staleBuild || !lastDiagnosis.extensionVersion) {
+    const stale = document.createElement('div');
+    stale.className = 'notice err';
+    stale.style.marginBottom = '10px';
+    stale.textContent =
+      `This report is ${ageMin} minute${ageMin === 1 ? '' : 's'} old` +
+      (staleBuild || !lastDiagnosis.extensionVersion
+        ? `, and was produced by ${lastDiagnosis.extensionVersion
+            ? 'v' + lastDiagnosis.extensionVersion : 'an older build'} while ` +
+          `v${running} is loaded. `
+        : '. ') +
+      'Re-run "Diagnose this article page" before trusting anything below — ' +
+      'and if the extension was just reloaded, reload the x.com tab too.';
+    out.appendChild(stale);
+  }
 
   // A short verdict up front, so the common failures don't need reading JSON.
   const verdicts = [];

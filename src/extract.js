@@ -150,16 +150,33 @@
 
     if (!bodyEl) return null;
 
+    /*
+     * Read the title BEFORE scrolling.
+     *
+     * The header is above the body, and X unmounts it once you scroll away —
+     * so by the time we reach the bottom there is nothing left to read it
+     * from. That is why "Diagnose", which measures the page as-is, kept
+     * reporting the correct title while extraction, which rides to the
+     * bottom first, kept storing the author's name instead. Same page, same
+     * code, different scroll position.
+     */
+    const earlyTitle = articleTitleFor(bodyEl, []);
+
     // Articles lazy-render as you scroll; ride to the bottom before reading.
     await dom.autoScroll({ maxSteps: 25, settleMs: 500 });
     await dom.waitForStable(() => dom.richText(bodyEl).length, { quietMs: 800 });
 
     let blocks = blocksFromArticle(bodyEl);
-    const title = articleTitleFor(bodyEl, blocks);
+    const lateTitle = articleTitleFor(bodyEl, blocks);
+    const title = earlyTitle || lateTitle;
     blocks = dropTitleEcho(blocks, title);
 
     return {
-      title, blocks, source: 'article', via,
+      title,
+      titleVia: earlyTitle ? 'before-scroll' : (lateTitle ? 'after-scroll' : 'none'),
+      blocks,
+      source: 'article',
+      via,
       quality: assessBlocks(blocks, bodyEl),
     };
   }
@@ -456,6 +473,8 @@
       blocks: result.blocks,
       debug: Object.assign({
         via: result.via || result.source,
+        source: result.source,
+        titleVia: result.titleVia || null,
         blocks: result.blocks.length,
         chars,
         headings,
@@ -477,6 +496,10 @@
    */
   async function diagnose() {
     const report = {
+      // Stamped so a pasted report says which build produced it. Without
+      // this, a cached report from an older build is indistinguishable from
+      // a fresh one, and the wrong thing gets debugged.
+      extensionVersion: chrome.runtime.getManifest().version,
       url: location.href,
       path: location.pathname,
       at: new Date().toISOString(),

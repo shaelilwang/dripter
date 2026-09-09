@@ -328,6 +328,7 @@
       });
     }
     return {
+      extensionVersion: chrome.runtime.getManifest().version,
       url: location.href,
       path: location.pathname,
       at: new Date().toISOString(),

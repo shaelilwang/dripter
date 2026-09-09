@@ -238,6 +238,20 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
+// Report a re-read that finished after the popup was dismissed.
+(async () => {
+  const { lastReread } = await chrome.storage.local.get('lastReread');
+  if (!lastReread || Date.now() - lastReread.at > 5 * 60 * 1000) return;
+  await chrome.storage.local.remove('lastReread');
+  if (lastReread.extracted && lastReread.extracted.ok) {
+    say(`Re-read “${lastReread.title}” — ${lastReread.snippets} card` +
+        `${lastReread.snippets === 1 ? '' : 's'}.`, 'ok');
+  } else {
+    say('Last re-read failed: ' +
+        ((lastReread.extracted && lastReread.extracted.reason) || 'unknown'), 'err');
+  }
+})();
+
 refresh();
 chrome.runtime.sendMessage({ type: 'AD_JOB_STATUS' }).then((r) => {
   if (r && r.job && !r.job.finished) pollJob();
