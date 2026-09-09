@@ -66,28 +66,35 @@
 }
 
 .ad-head {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  margin-bottom: 2px;
+  margin-bottom: 10px;
   min-width: 0;
 }
 
-/* Shrinks to fit rather than being hard-capped, so short titles don't leave
-   a gap before the separator and long ones still ellipsize. */
+/* The article's name, sized to be findable while scrolling. Wraps to two
+   lines before it truncates — a title cut off at four words is no use. */
 .ad-title {
-  font-weight: 700;
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 800;
+  letter-spacing: -0.012em;
   color: var(--ad-fg);
-  white-space: nowrap;
+  margin-bottom: 3px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 0 1 auto;
-  min-width: 3em;
+}
+
+.ad-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 14px;
+  min-width: 0;
 }
 
 .ad-meta {
   color: var(--ad-muted);
-  font-weight: 400;
   flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
@@ -97,14 +104,12 @@
 
 .ad-dot {
   color: var(--ad-muted);
-  font-weight: 400;
   flex: 0 0 auto;
 }
 
 .ad-badge {
   color: var(--ad-tint);
   font-weight: 600;
-  font-size: 13px;
   flex: 0 0 auto;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -114,20 +119,20 @@
 
 .ad-heading {
   font-weight: 700;
-  font-size: 15px;
-  line-height: 20px;
-  margin-bottom: 4px;
+  font-size: 16px;
+  line-height: 22px;
+  margin-bottom: 8px;
   color: var(--ad-fg);
 }
 
 /* ---- snippet text ---- */
 
+/* Reading copy, not tweet copy: looser leading than X's 15/20, because these
+   cards carry paragraphs rather than a line or two. */
 .ad-text {
   margin: 0;
   font-size: 15px;
-  line-height: 20px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  line-height: 24px;
   color: var(--ad-fg);
 
   /* Clamp like X does with its own long posts; "Show more" lifts it. */
@@ -136,6 +141,17 @@
   -webkit-line-clamp: var(--ad-clamp, 12);
   overflow: hidden;
 }
+
+/* One block per paragraph, so the gap between them is a real margin rather
+   than a single blank line. Single newlines inside a paragraph are kept, so
+   a run of list lines stays tight. */
+.ad-p {
+  margin: 0 0 15px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ad-p:last-child { margin-bottom: 0; }
 
 .ad-card.is-expanded .ad-text {
   display: block;
@@ -157,10 +173,10 @@
 .ad-more:hover { text-decoration: underline; }
 
 /* A section heading inside an article. Distinct, but not a different object. */
-.ad-text.is-heading {
+.ad-text.is-heading .ad-p {
   font-weight: 700;
   font-size: 17px;
-  line-height: 23px;
+  line-height: 24px;
   letter-spacing: -0.01em;
 }
 
@@ -178,7 +194,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 14px;
   max-width: 520px;
   flex-wrap: wrap;
 }

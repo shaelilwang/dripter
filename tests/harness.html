@@ -527,6 +527,18 @@
       await new Promise((r) => setTimeout(r, 250));
 
       const cs = cards();
+
+      check('the article name leads the card',
+        cs[0].querySelector('.ad-title').textContent === 'Article CR1',
+        JSON.stringify(cs[0].querySelector('.ad-title').textContent));
+      check('at heading size, not body size',
+        parseFloat(getComputedStyle(cs[0].querySelector('.ad-title')).fontSize) >= 18,
+        getComputedStyle(cs[0].querySelector('.ad-title')).fontSize);
+      check('and heavier than the body',
+        Number(getComputedStyle(cs[0].querySelector('.ad-title')).fontWeight) >= 700);
+      check('author and position sit underneath it',
+        !!cs[0].querySelector('.ad-sub .ad-meta') && !!cs[0].querySelector('.ad-sub .ad-badge'));
+
       check('renders the section heading above the body',
         cs[0].querySelector('.ad-heading').textContent === 'Section One',
         JSON.stringify(cs[0].querySelector('.ad-heading').textContent));
@@ -547,6 +559,42 @@
         cs.length >= 3, `only ${cs.length}`);
       check('a snippet with no heading hides the heading row',
         cs[2] && cs[2].querySelector('.ad-heading').style.display === 'none');
+    }
+
+    section('paragraph spacing');
+    {
+      // Blank lines become real paragraph blocks with a margin; single
+      // newlines stay inside one block so list runs don't get aired out.
+      __resetStorage();
+      inject._resetLayout(); inject.clearCards();
+      await store.setSettings({ everyNPosts: 3, markReadOnView: false });
+      await inject._reload();
+      await store.upsertItem({ id: 'SP', url: 'u', kind: 'article',
+        title: 'Spacing', author: { name: 'A', handle: 'a' } });
+      await store.setSnippets('SP', [{
+        kind: 'para', heading: null,
+        text: 'First paragraph.\n\nSecond paragraph.\n\n- one\n- two\n- three',
+      }]);
+      buildFeed(6);
+      await inject.sweep();
+      await new Promise((r) => setTimeout(r, 200));
+
+      const t = cards()[0].querySelector('.ad-text');
+      const ps = [...t.querySelectorAll('.ad-p')];
+      eq2('one block per blank-line-separated paragraph', ps.length, 3);
+      eq2('the list stays in a single block', ps[2].textContent,
+        '- one\n- two\n- three');
+      check('paragraphs are spaced with a real margin',
+        parseFloat(getComputedStyle(ps[0]).marginBottom) >= 10,
+        getComputedStyle(ps[0]).marginBottom);
+      check('the last one does not add a trailing gap',
+        parseFloat(getComputedStyle(ps[2]).marginBottom) === 0);
+      check('leading is looser than X\u2019s 15/20 tweet copy',
+        parseFloat(getComputedStyle(t).lineHeight) >= 23,
+        getComputedStyle(t).lineHeight);
+      check('the text is still exactly what was stored',
+        ps.map((x) => x.textContent).join('\n\n') ===
+          'First paragraph.\n\nSecond paragraph.\n\n- one\n- two\n- three');
     }
 
     section('incremental re-harvest');

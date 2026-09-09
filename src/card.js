@@ -152,6 +152,27 @@
     clampObserver.observe(textEl);
   }
 
+  /**
+   * Lay the snippet out as real paragraphs.
+   *
+   * A single pre-wrap text node renders a blank line between paragraphs at
+   * exactly one line-height, which reads as a solid wall on anything longer
+   * than a tweet. Splitting on blank lines and giving each paragraph its own
+   * block lets CSS space them properly — and keeps the author's own spacing,
+   * since the blank lines are where they put them. Single newlines stay
+   * inside a paragraph (pre-wrap), so a run of list lines stays tight.
+   */
+  function renderBody(textEl, text) {
+    textEl.textContent = '';
+    const paras = String(text == null ? '' : text).split(/\n{2,}/);
+    for (const para of paras) {
+      if (!para.trim()) continue;
+      const node = el('p', 'ad-p');
+      node.textContent = para;
+      textEl.appendChild(node);
+    }
+  }
+
   function build() {
     const card = el('div', 'ad-card');
     card.setAttribute('data-ad-card', '1');
@@ -163,13 +184,16 @@
 
     const body = el('div', 'ad-body');
 
-    // Header reads like a post byline: Title · @handle · drip 4/8
+    // The article's name leads, on its own line and at heading size — it is
+    // the thing you need to recognise at a glance while scrolling past.
+    // Author and position sit under it as secondary detail.
     const head = el('div', 'ad-head');
-    head.appendChild(el('span', 'ad-title'));
-    head.appendChild(el('span', 'ad-dot', '·'));
-    head.appendChild(el('span', 'ad-meta'));
-    head.appendChild(el('span', 'ad-dot', '·'));
-    head.appendChild(el('span', 'ad-badge'));
+    head.appendChild(el('div', 'ad-title'));
+    const sub = el('div', 'ad-sub');
+    sub.appendChild(el('span', 'ad-meta'));
+    sub.appendChild(el('span', 'ad-dot', '·'));
+    sub.appendChild(el('span', 'ad-badge'));
+    head.appendChild(sub);
     body.appendChild(head);
 
     body.appendChild(el('div', 'ad-heading'));
@@ -223,7 +247,7 @@
     card.dataset.adCounted = '0';
 
     const textEl = card.querySelector('.ad-text');
-    textEl.textContent = p.snippet ? p.snippet.text : '';
+    renderBody(textEl, p.snippet ? p.snippet.text : '');
     textEl.classList.toggle('is-heading', !!(p.snippet && p.snippet.kind === 'heading'));
 
     // Section heading rides above the prose it belongs to.

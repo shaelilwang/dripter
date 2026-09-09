@@ -225,6 +225,13 @@ node is attached. `render()` runs while it is still detached where everything
 measures zero, and the ResizeObserver alone does not reliably catch the
 transition into the document.
 
+**The card body is one block per paragraph, not a pre-wrap text node.**
+`renderBody()` splits on blank lines and emits an `.ad-p` per paragraph, so
+the gap between them is a margin rather than a single blank line — a wall of
+text was the complaint. Single newlines stay inside a paragraph (pre-wrap) so
+list runs stay tight. `-webkit-line-clamp` still works over these block
+children; the clamp test covers it.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or
