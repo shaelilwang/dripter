@@ -1,4 +1,4 @@
-/* Article Drip — lifecycle.js
+/* Dripter — lifecycle.js
  *
  * Handles the content script outliving the extension that injected it.
  *
@@ -13,7 +13,7 @@
  * the tab needs a reload.
  */
 ;(function (root) {
-  root.AD = root.AD || {};
+  root.DRIP = root.DRIP || {};
 
   const cleanups = [];
   let dead = false;
@@ -40,7 +40,7 @@
       try { fn(); } catch (_) {}
     }
     console.info(
-      `[article-drip] stopped: ${reason}. Reload this tab to start again.`
+      `[dripter] stopped: ${reason}. Reload this tab to start again.`
     );
   }
 
@@ -74,7 +74,7 @@
     return id;
   }
 
-  root.AD.life = {
+  root.DRIP.life = {
     isAlive, onTeardown, teardown, check, isContextError, guardedInterval,
     get dead() { return dead; },
     // Test seam. Teardown is deliberately one-shot and irreversible in a real

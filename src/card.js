@@ -1,12 +1,12 @@
-/* Article Drip — card.js
+/* Dripter — card.js
  *
  * Builds the snippet card and owns its interactions. Cards are plain DOM in
  * the page (not shadow roots) so they inherit X's font stack and feel native;
  * every class is `ad-`-prefixed to stay out of X's way.
  */
 ;(function (root) {
-  root.AD = root.AD || {};
-  const { dom, sel, store, life } = root.AD;
+  root.DRIP = root.DRIP || {};
+  const { dom, sel, store, life } = root.DRIP;
 
   /* ---------------------------------------------------------------- */
   /* theme sampling                                                    */
@@ -69,12 +69,12 @@
     if (!fg || contrastRatio(fg, bg) < 4.5) fg = readable;
 
     const css = document.documentElement.style;
-    css.setProperty('--ad-bg', `rgb(${bg.r},${bg.g},${bg.b})`);
-    css.setProperty('--ad-fg', `rgb(${fg.r},${fg.g},${fg.b})`);
-    css.setProperty('--ad-muted', dark ? 'rgb(139,152,165)' : 'rgb(83,100,113)');
-    css.setProperty('--ad-border', dark ? 'rgb(47,51,54)' : 'rgb(207,217,222)');
-    css.setProperty('--ad-accent', 'rgb(29,155,240)');
-    css.setProperty('--ad-lightness', dark ? '62%' : '42%');
+    css.setProperty('--drip-bg', `rgb(${bg.r},${bg.g},${bg.b})`);
+    css.setProperty('--drip-fg', `rgb(${fg.r},${fg.g},${fg.b})`);
+    css.setProperty('--drip-muted', dark ? 'rgb(139,152,165)' : 'rgb(83,100,113)');
+    css.setProperty('--drip-border', dark ? 'rgb(47,51,54)' : 'rgb(207,217,222)');
+    css.setProperty('--drip-accent', 'rgb(29,155,240)');
+    css.setProperty('--drip-lightness', dark ? '62%' : '42%');
     return { dark, bg, fg, contrast: contrastRatio(fg, bg) };
   }
 
@@ -130,8 +130,8 @@
 
   function updateClamp(card) {
     if (!card) return;
-    const textEl = card.querySelector('.ad-text');
-    const moreEl = card.querySelector('.ad-more');
+    const textEl = card.querySelector('.drip-text');
+    const moreEl = card.querySelector('.drip-more');
     if (!textEl || !moreEl) return;
 
     if (card.classList.contains('is-empty')) { moreEl.style.display = 'none'; return; }
@@ -145,7 +145,7 @@
     if (typeof ResizeObserver === 'undefined') return;
     if (!clampObserver) {
       clampObserver = new ResizeObserver((entries) => {
-        for (const e of entries) updateClamp(e.target.closest('.ad-card'));
+        for (const e of entries) updateClamp(e.target.closest('.drip-card'));
       });
       life.onTeardown(() => { clampObserver.disconnect(); clampObserver = null; });
     }
@@ -167,53 +167,53 @@
     const paras = String(text == null ? '' : text).split(/\n{2,}/);
     for (const para of paras) {
       if (!para.trim()) continue;
-      const node = el('p', 'ad-p');
+      const node = el('p', 'drip-p');
       node.textContent = para;
       textEl.appendChild(node);
     }
   }
 
   function build() {
-    const card = el('div', 'ad-card');
-    card.setAttribute('data-ad-card', '1');
+    const card = el('div', 'drip-card');
+    card.setAttribute('data-drip-card', '1');
     card.setAttribute('role', 'article');
 
     // Left gutter avatar, same 40px as X's own, so the text column lines up
     // with every other post in the feed.
-    card.appendChild(el('div', 'ad-avatar'));
+    card.appendChild(el('div', 'drip-avatar'));
 
-    const body = el('div', 'ad-body');
+    const body = el('div', 'drip-body');
 
     // The article's name leads, on its own line and at heading size — it is
     // the thing you need to recognise at a glance while scrolling past.
     // Author and position sit under it as secondary detail.
-    const head = el('div', 'ad-head');
-    head.appendChild(el('div', 'ad-title'));
-    const sub = el('div', 'ad-sub');
-    sub.appendChild(el('span', 'ad-meta'));
-    sub.appendChild(el('span', 'ad-dot', '·'));
-    sub.appendChild(el('span', 'ad-badge'));
+    const head = el('div', 'drip-head');
+    head.appendChild(el('div', 'drip-title'));
+    const sub = el('div', 'drip-sub');
+    sub.appendChild(el('span', 'drip-meta'));
+    sub.appendChild(el('span', 'drip-dot', '·'));
+    sub.appendChild(el('span', 'drip-badge'));
     head.appendChild(sub);
     body.appendChild(head);
 
-    body.appendChild(el('div', 'ad-heading'));
-    const textEl = el('div', 'ad-text');
+    body.appendChild(el('div', 'drip-heading'));
+    const textEl = el('div', 'drip-text');
     body.appendChild(textEl);
     watchClamp(textEl);
 
-    const more = el('button', 'ad-more', 'Show more');
+    const more = el('button', 'drip-more', 'Show more');
     more.type = 'button';
-    more.setAttribute('data-ad-act', 'more');
+    more.setAttribute('data-drip-act', 'more');
     body.appendChild(more);
 
-    body.appendChild(el('div', 'ad-note'));
+    body.appendChild(el('div', 'drip-note'));
 
-    const foot = el('div', 'ad-foot');
-    const prog = el('div', 'ad-progress');
+    const foot = el('div', 'drip-foot');
+    const prog = el('div', 'drip-progress');
     prog.appendChild(document.createElement('i'));
     foot.appendChild(prog);
 
-    const acts = el('div', 'ad-actions');
+    const acts = el('div', 'drip-actions');
     for (const [act, label, title] of [
       ['back', '‹ Back', 'Go back to the previous part'],
       ['later', 'Later', 'Hold this article back; it resumes right here'],
@@ -223,7 +223,7 @@
     ]) {
       const b = el('button', null, label);
       b.type = 'button';
-      b.setAttribute('data-ad-act', act);
+      b.setAttribute('data-drip-act', act);
       b.title = title;
       acts.appendChild(b);
     }
@@ -241,17 +241,17 @@
     const isEmpty = !!p.empty;
 
     card.classList.toggle('is-empty', isEmpty);
-    card.style.setProperty('--ad-hue', hueFor(p.itemId || 'empty'));
-    card.dataset.adItem = p.itemId || '';
-    card.dataset.adIndex = p.index == null ? '' : String(p.index);
-    card.dataset.adCounted = '0';
+    card.style.setProperty('--drip-hue', hueFor(p.itemId || 'empty'));
+    card.dataset.dripItem = p.itemId || '';
+    card.dataset.dripIndex = p.index == null ? '' : String(p.index);
+    card.dataset.dripCounted = '0';
 
-    const textEl = card.querySelector('.ad-text');
+    const textEl = card.querySelector('.drip-text');
     renderBody(textEl, p.snippet ? p.snippet.text : '');
     textEl.classList.toggle('is-heading', !!(p.snippet && p.snippet.kind === 'heading'));
 
     // Section heading rides above the prose it belongs to.
-    const headEl = card.querySelector('.ad-heading');
+    const headEl = card.querySelector('.drip-heading');
     const sectionHeading = p.snippet && p.snippet.heading;
     headEl.textContent = sectionHeading || '';
     headEl.style.display = sectionHeading ? '' : 'none';
@@ -259,40 +259,40 @@
     // Long snippets clamp behind "Show more", the way X truncates its own
     // long posts.
     card.classList.remove('is-expanded');
-    card.querySelector('.ad-more').textContent = 'Show more';
+    card.querySelector('.drip-more').textContent = 'Show more';
     updateClamp(card);
 
     const title = p.title || 'Untitled';
-    card.querySelector('.ad-title').textContent = title;
-    card.querySelector('.ad-title').title = title;
+    card.querySelector('.drip-title').textContent = title;
+    card.querySelector('.drip-title').title = title;
 
     const initial = (title.match(/[A-Za-z0-9]/) || ['·'])[0].toUpperCase();
-    card.querySelector('.ad-avatar').textContent = isEmpty ? '·' : initial;
+    card.querySelector('.drip-avatar').textContent = isEmpty ? '·' : initial;
 
     const handle = p.author && p.author.handle ? '@' + p.author.handle : '';
-    card.querySelector('.ad-meta').textContent = isEmpty ? '' : handle;
-    card.querySelector('.ad-badge').textContent =
+    card.querySelector('.drip-meta').textContent = isEmpty ? '' : handle;
+    card.querySelector('.drip-badge').textContent =
       isEmpty ? '' : `drip ${p.index + 1}/${p.total}`;
 
     // Hide the separator dots when there's nothing between them.
-    for (const d of card.querySelectorAll('.ad-dot')) {
+    for (const d of card.querySelectorAll('.drip-dot')) {
       d.style.display = isEmpty ? 'none' : '';
     }
 
-    for (const b of card.querySelectorAll('.ad-actions button')) {
+    for (const b of card.querySelectorAll('.drip-actions button')) {
       b.style.display = isEmpty ? 'none' : '';
     }
-    const backBtn = card.querySelector('[data-ad-act="back"]');
+    const backBtn = card.querySelector('[data-drip-act="back"]');
     if (backBtn) backBtn.disabled = isEmpty || !p.index;
 
-    const noteEl = card.querySelector('.ad-note');
+    const noteEl = card.querySelector('.drip-note');
     if (noteEl) { noteEl.textContent = ''; noteEl.style.display = 'none'; }
 
     const pct = p.total ? Math.round(((p.index + 1) / p.total) * 100) : 0;
-    card.querySelector('.ad-progress > i').style.width = pct + '%';
+    card.querySelector('.drip-progress > i').style.width = pct + '%';
     card.setAttribute('aria-label',
-      isEmpty ? 'Article Drip: queue empty'
-              : `Article Drip snippet ${p.index + 1} of ${p.total} from ${p.title}`);
+      isEmpty ? 'Dripter: queue empty'
+              : `Dripter snippet ${p.index + 1} of ${p.total} from ${p.title}`);
     return card;
   }
 
@@ -312,9 +312,9 @@
    */
   function displayedItems(except) {
     const seen = new Set();
-    for (const c of document.querySelectorAll('[data-ad-card]')) {
+    for (const c of document.querySelectorAll('[data-drip-card]')) {
       if (c === except) continue;
-      if (c.dataset.adItem) seen.add(c.dataset.adItem);
+      if (c.dataset.dripItem) seen.add(c.dataset.dripItem);
     }
     return seen;
   }
@@ -339,11 +339,11 @@
 
   /** Consume the snippet a card is showing, exactly once. */
   async function count(card) {
-    if (card.dataset.adCounted === '1') return false;
-    const id = card.dataset.adItem;
-    const idx = parseInt(card.dataset.adIndex, 10);
+    if (card.dataset.dripCounted === '1') return false;
+    const id = card.dataset.dripItem;
+    const idx = parseInt(card.dataset.dripIndex, 10);
     if (!id || isNaN(idx)) return false;
-    card.dataset.adCounted = '1';
+    card.dataset.dripCounted = '1';
     await store.consume(id, idx);
     return true;
   }
@@ -371,7 +371,7 @@
   /** Say something on the card without disturbing what it's showing. */
   let noteTimer = null;
   function note(card, text) {
-    const el = card.querySelector('.ad-note');
+    const el = card.querySelector('.drip-note');
     if (!el) return;
     el.textContent = text;
     el.style.display = '';
@@ -383,15 +383,15 @@
   }
 
   async function onClick(ev) {
-    const btn = ev.target.closest('button[data-ad-act]');
+    const btn = ev.target.closest('button[data-drip-act]');
     if (!btn) return;
     if (!life.check()) return;
     ev.preventDefault();
     ev.stopPropagation(); // don't let X treat this as a click on the feed
 
-    const card = btn.closest('.ad-card');
-    const id = card.dataset.adItem;
-    const act = btn.getAttribute('data-ad-act');
+    const card = btn.closest('.drip-card');
+    const id = card.dataset.dripItem;
+    const act = btn.getAttribute('data-drip-act');
 
     if (act === 'more') {
       const expanded = card.classList.toggle('is-expanded');
@@ -427,7 +427,7 @@
       // means it's still here if you change your mind.
       if (!id) return;
       await store.snooze(id);
-      card.dataset.adCounted = '1';
+      card.dataset.dripCounted = '1';
       note(card, 'OK — showing this again later, right where you left it.');
       return;
     }
@@ -465,7 +465,7 @@
 
   /** Has the reader scrolled since this card was placed? */
   const scrolledSincePlacement = (card) =>
-    Number(card.dataset.adTick || 0) !== scrollTick;
+    Number(card.dataset.dripTick || 0) !== scrollTick;
 
   function clearTimer(card) {
     const t = timers.get(card);
@@ -527,11 +527,11 @@
     bindScroll();
     // Stamp the scroll position this card was born at, so it can't be counted
     // as read merely for having been rendered into the opening viewport.
-    card.dataset.adTick = String(scrollTick);
+    card.dataset.dripTick = String(scrollTick);
     if (observer) observer.observe(card);
   }
 
-  root.AD.card = {
+  root.DRIP.card = {
     create, render, applyTheme, startDwellTracking, track,
     takeNext, releaseAll, updateClamp, refreshTheme, contrastRatio,
     paintItem, displayedItems, EMPTY,

@@ -1,11 +1,11 @@
-/* Article Drip — main.js
+/* Dripter — main.js
  *
  * Entry point for the content script bundle. Decides what this particular
  * x.com page is for, and answers messages from the popup and the worker.
  */
 ;(function (root) {
-  root.AD = root.AD || {};
-  const { sel, store, collect, extract, inject } = root.AD;
+  root.DRIP = root.DRIP || {};
+  const { sel, store, collect, extract, inject } = root.DRIP;
 
   const path = () => location.pathname;
   // /i/history lists what you've opened recently and carries the same post
@@ -27,15 +27,15 @@
       .catch((e) => sendResponse({ ok: false, error: String((e && e.message) || e) }));
 
     switch (msg.type) {
-      case 'AD_PING':
+      case 'DRIP_PING':
         reply({ path: path(), onBookmarks: isBookmarks(), onHome: isHome() });
         return true;
 
-      case 'AD_DOCTOR':
+      case 'DRIP_DOCTOR':
         reply({ report: sel.doctor() });
         return true;
 
-      case 'AD_HARVEST':
+      case 'DRIP_HARVEST':
         if (!isBookmarks()) {
           reply(Promise.reject(new Error(
             'Open x.com/i/bookmarks (or /i/history) first — harvest reads the ' +
@@ -43,12 +43,12 @@
           return true;
         }
         reply(collect.harvestAll((p) => {
-          try { chrome.runtime.sendMessage({ type: 'AD_HARVEST_PROGRESS', ...p }); }
+          try { chrome.runtime.sendMessage({ type: 'DRIP_HARVEST_PROGRESS', ...p }); }
           catch (_) {}
         }));
         return true;
 
-      case 'AD_DIAGNOSE':
+      case 'DRIP_DIAGNOSE':
         reply(extract.diagnose().then((report) => ({ report })));
         return true;
 
@@ -60,7 +60,7 @@
        * you are already looking at — and it resets everything else's
        * reading position on the way.
        */
-      case 'AD_EXTRACT_HERE':
+      case 'DRIP_EXTRACT_HERE':
         reply((async () => {
           const m = path().match(/^\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/);
           if (!m) throw new Error('Open the article itself first (an x.com/…/status/… page).');
@@ -98,15 +98,15 @@
         })());
         return true;
 
-      case 'AD_EXTRACT':
+      case 'DRIP_EXTRACT':
         reply(extract.extractInto(msg.item));
         return true;
 
-      case 'AD_RESWEEP':
+      case 'DRIP_RESWEEP':
         reply(inject.sweep().then(() => ({})));
         return true;
 
-      case 'AD_CLEAR_CARDS':
+      case 'DRIP_CLEAR_CARDS':
         inject.clearCards();
         reply({});
         return true;
@@ -123,7 +123,7 @@
   // Tell the worker we're alive. If it opened this tab to extract something,
   // it will message us back with the item.
   try {
-    chrome.runtime.sendMessage({ type: 'AD_CONTENT_READY', path: path() });
+    chrome.runtime.sendMessage({ type: 'DRIP_CONTENT_READY', path: path() });
   } catch (_) {}
 
   let injectStarted = false;
@@ -137,7 +137,7 @@
     startInject();
   } else {
     // x.com is a SPA — it can navigate into /home without a reload.
-    root.AD.dom.onRouteChange((p) => {
+    root.DRIP.dom.onRouteChange((p) => {
       if (/^\/(home)?$/.test(p)) startInject();
     });
   }
@@ -148,7 +148,7 @@
     (async () => {
       const settings = await store.getSettings();
       const tick = () => collect.harvestVisible(settings).catch(() => {});
-      root.AD.life.guardedInterval(tick, 1500);
+      root.DRIP.life.guardedInterval(tick, 1500);
       tick();
     })();
   }

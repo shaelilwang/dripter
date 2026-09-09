@@ -1,4 +1,4 @@
-# Article Drip
+# Dripter
 
 Takes the X Articles and threads you've bookmarked, chops them into
 tweet-sized snippets, and slides them into your home feed between real posts —
@@ -135,7 +135,7 @@ on the other machine. Import merges rather than overwrites, and for any article
 on both sides it keeps whichever copy has read further, so syncing in either
 direction never rewinds you.
 
-`./make-zip.sh` builds a distributable `article-drip.zip` with the tests
+`./make-zip.sh` builds a distributable `dripter.zip` with the tests
 stripped out.
 
 ---

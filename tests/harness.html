@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Article Drip — injection harness</title>
+  <title>Dripter — injection harness</title>
   <style>
     body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
            margin: 0; display: grid; grid-template-columns: 420px 1fr; height: 100vh; }
@@ -15,7 +15,11 @@
     .t.no::before  { content: "FAIL "; color: #c00; }
     .t.no { color: #c00; }
     #summary { margin-top: 18px; font-weight: 700; padding: 10px; border-radius: 6px; }
-    #feed { overflow: auto; padding: 0; }
+    /* Fixed width on purpose. A hidden browser pane reports innerWidth 0,
+       which collapses this column and wraps a 27-character paragraph to 23
+       lines — making the clamp tests fail for reasons that have nothing to
+       do with the code under test. */
+    #feed { overflow: auto; padding: 0; min-width: 620px; }
     /* Deliberately mimics x.com's structure, not its looks. */
     .fakepost { padding: 14px 16px; border-bottom: 1px solid #e6ecf0; }
     .fakepost b { display: block; font-size: 13px; }
@@ -24,7 +28,7 @@
   <link rel="stylesheet" href="../src/card.css">
 </head>
 <body>
-  <div id="results"><h1>Article Drip — injection harness</h1></div>
+  <div id="results"><h1>Dripter — injection harness</h1></div>
   <div id="feed"></div>
 
   <script>
@@ -41,15 +45,18 @@
               else if (typeof keys === 'string') out = { [keys]: mem[keys] };
               else if (Array.isArray(keys)) { out = {}; for (const k of keys) out[k] = mem[k]; }
               else { out = Object.assign({}, keys); for (const k of Object.keys(keys)) if (k in mem) out[k] = mem[k]; }
-              setTimeout(() => cb(out), 0);
+              // queueMicrotask, not setTimeout: still async (callbacks never
+              // run synchronously), but a hidden pane throttles timers to
+              // ~1/second, and the suite makes hundreds of storage calls.
+              queueMicrotask(() => cb(out));
             },
             set(obj, cb) {
               const changes = {};
               for (const [k, v] of Object.entries(obj)) changes[k] = { newValue: v };
               Object.assign(mem, JSON.parse(JSON.stringify(obj)));
-              setTimeout(() => { cb && cb(); listeners.forEach((f) => f(changes, 'local')); }, 0);
+              queueMicrotask(() => { cb && cb(); listeners.forEach((f) => f(changes, 'local')); });
             },
-            clear(cb) { mem = {}; setTimeout(() => cb && cb(), 0); },
+            clear(cb) { mem = {}; queueMicrotask(() => cb && cb()); },
           },
           onChanged: { addListener: (f) => listeners.push(f) },
         },
@@ -77,7 +84,7 @@
 
   <script>
   (async function () {
-    const { store, inject, chunker } = AD;
+    const { store, inject, chunker } = DRIP;
     const out = document.getElementById('results');
     const feed = document.getElementById('feed');
     let pass = 0, fail = 0;
@@ -117,8 +124,8 @@
       return tl;
     }
 
-    const cards = () => [...document.querySelectorAll('[data-ad-card]')];
-    const cardTexts = () => cards().map((c) => c.querySelector('.ad-text').textContent);
+    const cards = () => [...document.querySelectorAll('[data-drip-card]')];
+    const cardTexts = () => cards().map((c) => c.querySelector('.drip-text').textContent);
 
     async function seedArticle(id, nSnippets) {
       await store.upsertItem({
@@ -153,7 +160,7 @@
     {
       // Each card must sit immediately after every 4th cell.
       const kids = [...document.querySelector('[aria-label^="Timeline:"]').children];
-      const positions = kids.map((k, i) => k.matches('[data-ad-card]') ? i : -1).filter((i) => i >= 0);
+      const positions = kids.map((k, i) => k.matches('[data-drip-card]') ? i : -1).filter((i) => i >= 0);
       check('cards land at the right offsets',
         positions.every((p, i) => p === (i + 1) * 4 + i),
         JSON.stringify(positions));
@@ -174,12 +181,12 @@
       check('no two visible cards show the same snippet',
         new Set(texts).size === texts.length, JSON.stringify(texts));
       check('each card is a different article',
-        new Set(cards().map((c) => c.dataset.adItem)).size === cards().length,
-        JSON.stringify(cards().map((c) => c.dataset.adItem)));
+        new Set(cards().map((c) => c.dataset.dripItem)).size === cards().length,
+        JSON.stringify(cards().map((c) => c.dataset.dripItem)));
       check('each starts at its own first snippet',
         texts.every((t) => /snippet 0$/.test(t)), JSON.stringify(texts));
       check('heading snippet is styled as one',
-        cards()[0].querySelector('.ad-text').classList.contains('is-heading'));
+        cards()[0].querySelector('.drip-text').classList.contains('is-heading'));
     }
 
     section('virtualization churn');
@@ -203,7 +210,7 @@
       const kids = [...tl.children];
       let since = 0, worst = 0, adjacent = false, prevWasCard = false;
       for (const k of kids) {
-        const isCard = k.matches('[data-ad-card]');
+        const isCard = k.matches('[data-drip-card]');
         if (isCard) {
           if (prevWasCard) adjacent = true;
           worst = Math.max(worst, since);
@@ -248,10 +255,10 @@
     await inject.sweep();
     {
       const first = cards()[0];
-      const before = first.querySelector('.ad-text').textContent;
-      first.querySelector('[data-ad-act="next"]').click();
+      const before = first.querySelector('.drip-text').textContent;
+      first.querySelector('[data-drip-act="next"]').click();
       await new Promise((r) => setTimeout(r, 120));
-      const after = first.querySelector('.ad-text').textContent;
+      const after = first.querySelector('.drip-text').textContent;
       check('Next swaps the text in place', before !== after, `${before} -> ${after}`);
       check('Next advanced the stored cursor',
         (await store.getItem('900')).cursor >= 1,
@@ -265,7 +272,7 @@
 
       // And repeatedly advancing must keep finding new material.
       for (let i = 0; i < 4; i++) {
-        first.querySelector('[data-ad-act="next"]').click();
+        first.querySelector('[data-drip-act="next"]').click();
         await new Promise((r) => setTimeout(r, 90));
       }
       const advanced = cardTexts();
@@ -342,7 +349,7 @@
       );
       feed.appendChild(tl);
 
-      await AD.collect.harvestVisible(await store.getSettings());
+      await DRIP.collect.harvestVisible(await store.getSettings());
       const items = await store.getItems();
 
       check('Article detected with no /i/article/ link present',
@@ -375,7 +382,7 @@
         items['111'] && items['111'].statusUrl === 'https://x.com/joulee/status/111',
         JSON.stringify(items['111'] && items['111'].statusUrl));
 
-      const cen = AD.sel.census();
+      const cen = DRIP.sel.census();
       check('census counts the cover images', cen.articleMarkers === 1, String(cen.articleMarkers));
       check('census reports the marker as in-post',
         cen.articleish.length === 1 && cen.articleish[0].insideTweet === true,
@@ -385,7 +392,7 @@
         JSON.stringify(cen.pageWideSpecialLinks));
 
       // Re-harvesting the same rendered posts must not duplicate them.
-      await AD.collect.harvestVisible(await store.getSettings());
+      await DRIP.collect.harvestVisible(await store.getSettings());
       check('re-harvest is idempotent',
         Object.keys(await store.getItems()).length === 4,
         String(Object.keys(await store.getItems()).length));
@@ -403,7 +410,7 @@
 
     section('article body extraction');
     {
-      const { dropTitleEcho, blocksFromArticle } = AD.extract;
+      const { dropTitleEcho, blocksFromArticle } = DRIP.extract;
 
       eq2('drops a title echo at the top',
         dropTitleEcho([{text:'The Big Idea'},{text:'Real prose follows here.'}], 'The Big Idea')
@@ -463,13 +470,13 @@
       check('headings are still recognised as headings',
         mmHeadings === 3, String(mmHeadings));
 
-      const mmQ = AD.extract.assessBlocks(mm, mixedMarkup);
+      const mmQ = DRIP.extract.assessBlocks(mm, mixedMarkup);
       check('quality check sees good coverage', mmQ.coverage > 0.9,
         String(mmQ.coverage));
       check('and a sane heading ratio', mmQ.headingRatio < 0.6,
         String(mmQ.headingRatio));
 
-      const mmCards = AD.chunker.chunk(mm, { maxCards: 5 });
+      const mmCards = DRIP.chunker.chunk(mm, { maxCards: 5 });
       check('cards carry body text, not just headings',
         mmCards.every((c) => c.text && c.text.length > 40),
         JSON.stringify(mmCards.map((c) => c.text.length)));
@@ -479,7 +486,7 @@
       const headOnly = document.createElement('div');
       headOnly.innerHTML = '<h2>Alpha</h2><h2>Beta</h2><h2>Gamma</h2><h2>Delta</h2>';
       document.body.appendChild(headOnly);
-      const hq = AD.extract.assessBlocks(blocksFromArticle(headOnly), headOnly);
+      const hq = DRIP.extract.assessBlocks(blocksFromArticle(headOnly), headOnly);
       check('an all-headings grab is flagged by the quality check',
         hq.headingRatio > 0.8, String(hq.headingRatio));
       headOnly.remove();
@@ -495,7 +502,7 @@
         `${db.length} blocks: ` + JSON.stringify(db.map((b) => b.text.slice(0, 25))));
       check('prose survives intact',
         db.some((b) => b.text.includes('ignore the path taken to reach it')));
-      const chunked = AD.chunker.chunk(db);
+      const chunked = DRIP.chunker.chunk(db);
       check('and does not come back as headings',
         chunked.every((s) => s.kind === 'para'),
         JSON.stringify(chunked.map((s) => s.kind)));
@@ -529,36 +536,36 @@
       const cs = cards();
 
       check('the article name leads the card',
-        cs[0].querySelector('.ad-title').textContent === 'Article CR1',
-        JSON.stringify(cs[0].querySelector('.ad-title').textContent));
+        cs[0].querySelector('.drip-title').textContent === 'Article CR1',
+        JSON.stringify(cs[0].querySelector('.drip-title').textContent));
       check('at heading size, not body size',
-        parseFloat(getComputedStyle(cs[0].querySelector('.ad-title')).fontSize) >= 18,
-        getComputedStyle(cs[0].querySelector('.ad-title')).fontSize);
+        parseFloat(getComputedStyle(cs[0].querySelector('.drip-title')).fontSize) >= 18,
+        getComputedStyle(cs[0].querySelector('.drip-title')).fontSize);
       check('and heavier than the body',
-        Number(getComputedStyle(cs[0].querySelector('.ad-title')).fontWeight) >= 700);
+        Number(getComputedStyle(cs[0].querySelector('.drip-title')).fontWeight) >= 700);
       check('author and position sit underneath it',
-        !!cs[0].querySelector('.ad-sub .ad-meta') && !!cs[0].querySelector('.ad-sub .ad-badge'));
+        !!cs[0].querySelector('.drip-sub .drip-meta') && !!cs[0].querySelector('.drip-sub .drip-badge'));
 
       check('renders the section heading above the body',
-        cs[0].querySelector('.ad-heading').textContent === 'Section One',
-        JSON.stringify(cs[0].querySelector('.ad-heading').textContent));
+        cs[0].querySelector('.drip-heading').textContent === 'Section One',
+        JSON.stringify(cs[0].querySelector('.drip-heading').textContent));
       check('a short card offers no Show more',
-        cs[0].querySelector('.ad-more').style.display === 'none');
+        cs[0].querySelector('.drip-more').style.display === 'none');
       check('a long card does',
-        cs[1].querySelector('.ad-more').style.display !== 'none');
+        cs[1].querySelector('.drip-more').style.display !== 'none');
 
       const long = cs[1];
-      long.querySelector('[data-ad-act="more"]').click();
+      long.querySelector('[data-drip-act="more"]').click();
       check('expanding lifts the clamp', long.classList.contains('is-expanded'));
       check('and the control flips to Show less',
-        long.querySelector('.ad-more').textContent === 'Show less');
-      long.querySelector('[data-ad-act="more"]').click();
+        long.querySelector('.drip-more').textContent === 'Show less');
+      long.querySelector('[data-drip-act="more"]').click();
       check('collapsing puts it back', !long.classList.contains('is-expanded'));
 
       check('enough cards were placed to cover all three snippets',
         cs.length >= 3, `only ${cs.length}`);
       check('a snippet with no heading hides the heading row',
-        cs[2] && cs[2].querySelector('.ad-heading').style.display === 'none');
+        cs[2] && cs[2].querySelector('.drip-heading').style.display === 'none');
     }
 
     section('paragraph spacing');
@@ -579,8 +586,8 @@
       await inject.sweep();
       await new Promise((r) => setTimeout(r, 200));
 
-      const t = cards()[0].querySelector('.ad-text');
-      const ps = [...t.querySelectorAll('.ad-p')];
+      const t = cards()[0].querySelector('.drip-text');
+      const ps = [...t.querySelectorAll('.drip-p')];
       eq2('one block per blank-line-separated paragraph', ps.length, 3);
       eq2('the list stays in a single block', ps[2].textContent,
         '- one\n- two\n- three');
@@ -599,7 +606,7 @@
 
     section('article title');
     {
-      const { articleTitleFor, blocksFromArticle, dropTitleEcho } = AD.extract;
+      const { articleTitleFor, blocksFromArticle, dropTitleEcho } = DRIP.extract;
 
       // The reported bug: the card was headed with the author's name while
       // the real title sat in the body as its opening heading.
@@ -637,7 +644,7 @@
 
     section('title above the body');
     {
-      const { titleAboveBody, articleTitleFor, blocksFromArticle } = AD.extract;
+      const { titleAboveBody, articleTitleFor, blocksFromArticle } = DRIP.extract;
 
       // Modelled on a real diagnosis of an X Article page: the title is not a
       // heading at all. The only h1/h2 outside the body are X's chrome, and
@@ -684,7 +691,7 @@
         '<div data-testid="twitterArticleRichTextView"><div>Body prose here.</div></div>';
       document.body.appendChild(col);
       eq2('no large line above the body means no title',
-        AD.extract.titleAboveBody(
+        DRIP.extract.titleAboveBody(
           col.querySelector('[data-testid="twitterArticleRichTextView"]')), null);
       col.remove();
     }
@@ -706,12 +713,12 @@
       document.body.appendChild(col);
       const bodyEl = col.querySelector('[data-testid="twitterArticleRichTextView"]');
 
-      const before = AD.extract.articleTitleFor(bodyEl, []);
+      const before = DRIP.extract.articleTitleFor(bodyEl, []);
       eq2('the title is readable before scrolling', before, 'The Real Title');
 
       // Simulate the header being unmounted, as scrolling away does.
       col.querySelector('[data-testid="twitter-article-title"]').remove();
-      const after = AD.extract.articleTitleFor(bodyEl, AD.extract.blocksFromArticle(bodyEl));
+      const after = DRIP.extract.articleTitleFor(bodyEl, DRIP.extract.blocksFromArticle(bodyEl));
       eq2('and gone afterwards', after, null);
       check('so the early read is the one that must be kept',
         (before || after) === 'The Real Title');
@@ -736,10 +743,10 @@
       document.body.appendChild(col);
 
       const bodyEl = col.querySelector('[data-testid="twitterArticleRichTextView"]');
-      const blocks = AD.extract.blocksFromArticle(bodyEl);
+      const blocks = DRIP.extract.blocksFromArticle(bodyEl);
       eq2('the confirmed testid wins over bigger text nearby',
-        AD.extract.articleTitleFor(bodyEl, blocks), 'LLM-as-Judge Architectures');
-      eq2('and the selector resolves', AD.sel.pick('articleTitleExact'),
+        DRIP.extract.articleTitleFor(bodyEl, blocks), 'LLM-as-Judge Architectures');
+      eq2('and the selector resolves', DRIP.sel.pick('articleTitleExact'),
         '[data-testid="twitter-article-title"]');
       col.remove();
     }
@@ -752,7 +759,7 @@
       document.body.appendChild(col);
       const b = col.querySelector('[data-testid="twitterArticleRichTextView"]');
       eq2('camelCase naming still matches',
-        AD.extract.articleTitleFor(b, AD.extract.blocksFromArticle(b)), 'Older Naming');
+        DRIP.extract.articleTitleFor(b, DRIP.extract.blocksFromArticle(b)), 'Older Naming');
       col.remove();
     }
     {
@@ -765,7 +772,7 @@
       document.body.appendChild(col);
       const b = col.querySelector('[data-testid="twitterArticleRichTextView"]');
       check('X chrome is never picked up as a title',
-        AD.extract.articleTitleFor(b, AD.extract.blocksFromArticle(b)) !== 'Conversation');
+        DRIP.extract.articleTitleFor(b, DRIP.extract.blocksFromArticle(b)) !== 'Conversation');
       col.remove();
     }
 
@@ -843,8 +850,8 @@
       // A second harvest over unchanged bookmarks must stop scrolling instead
       // of re-reading the whole backlog.
       let steps = 0;
-      const origScroll = AD.dom.autoScroll;
-      AD.dom.autoScroll = async (opts) => {
+      const origScroll = DRIP.dom.autoScroll;
+      DRIP.dom.autoScroll = async (opts) => {
         // Stand in for a long list: always "loads more", never runs out.
         for (let i = 0; i < 20; i++) {
           steps++;
@@ -870,15 +877,15 @@
         }));
       }
       feed.appendChild(btl);
-      await AD.collect.harvestVisible(await store.getSettings());
+      await DRIP.collect.harvestVisible(await store.getSettings());
 
-      // Case 1: fresh page load — adSeen marks are gone, so every post is
+      // Case 1: fresh page load — dripSeen marks are gone, so every post is
       // re-read and recognised as already known.
       for (const t of document.querySelectorAll('[data-testid="tweet"]')) {
-        delete t.dataset.adSeen;
+        delete t.dataset.dripSeen;
       }
       steps = 0;
-      const reloaded = await AD.collect.harvestAll();
+      const reloaded = await DRIP.collect.harvestAll();
       check('after a reload, stops early on familiar bookmarks',
         reloaded.stoppedEarly === true, JSON.stringify(reloaded));
       check('and does so within a few screenfuls', steps <= 5, `${steps} steps`);
@@ -886,21 +893,21 @@
       check('but does report what it recognised',
         reloaded.revisited > 0, String(reloaded.revisited));
 
-      // Case 2: re-run in the same tab — adSeen suppresses every post, so the
+      // Case 2: re-run in the same tab — dripSeen suppresses every post, so the
       // harvest sees neither fresh nor known. It must still stop.
       steps = 0;
-      const sameSession = await AD.collect.harvestAll();
+      const sameSession = await DRIP.collect.harvestAll();
       check('re-running in the same tab also stops early',
         sameSession.stoppedEarly === true, JSON.stringify(sameSession));
       check('without scrolling the whole list', steps <= 5, `${steps} steps`);
 
       await store.setSettings({ incrementalHarvest: false });
       steps = 0;
-      const full = await AD.collect.harvestAll();
+      const full = await DRIP.collect.harvestAll();
       check('full re-scan keeps going when the setting is off',
         full.stoppedEarly === false && steps === 20, `${steps} steps`);
 
-      AD.dom.autoScroll = origScroll;
+      DRIP.dom.autoScroll = origScroll;
       await store.setSettings({ incrementalHarvest: true });
     }
 
@@ -920,7 +927,7 @@
       buildFeed(20);
       await inject.sweep();
 
-      const ids = cards().map((c) => c.dataset.adItem);
+      const ids = cards().map((c) => c.dataset.dripItem);
       check('never two cards from the same article',
         new Set(ids).size === ids.length, JSON.stringify(ids));
       check('at most one card per available article',
@@ -943,33 +950,33 @@
 
       const c = cards()[0];
       const press = async (act) => {
-        c.querySelector(`[data-ad-act="${act}"]`).click();
+        c.querySelector(`[data-drip-act="${act}"]`).click();
         await new Promise((r) => setTimeout(r, 120));
       };
-      const badge = () => c.querySelector('.ad-badge').textContent;
+      const badge = () => c.querySelector('.drip-badge').textContent;
 
       eq2('starts at the first part', badge(), 'drip 1/6');
       check('back is disabled at the start',
-        c.querySelector('[data-ad-act="back"]').disabled === true);
+        c.querySelector('[data-drip-act="back"]').disabled === true);
 
       await press('next');
       eq2('next advances exactly one', badge(), 'drip 2/6');
       await press('next');
       eq2('and again, one at a time', badge(), 'drip 3/6');
       check('back is now available',
-        c.querySelector('[data-ad-act="back"]').disabled === false);
+        c.querySelector('[data-drip-act="back"]').disabled === false);
 
       await press('back');
       eq2('back goes to the previous part', badge(), 'drip 2/6');
-      eq2('and stays on the same article', c.dataset.adItem, 'CTL');
+      eq2('and stays on the same article', c.dataset.dripItem, 'CTL');
 
       // Later: confirms in place, does not flip the content.
-      const shown = c.querySelector('.ad-text').textContent;
+      const shown = c.querySelector('.drip-text').textContent;
       await press('later');
-      eq2('later leaves the text alone', c.querySelector('.ad-text').textContent, shown);
-      eq2('and stays on the same article', c.dataset.adItem, 'CTL');
-      check('it says so', /again later/i.test(c.querySelector('.ad-note').textContent),
-        JSON.stringify(c.querySelector('.ad-note').textContent));
+      eq2('later leaves the text alone', c.querySelector('.drip-text').textContent, shown);
+      eq2('and stays on the same article', c.dataset.dripItem, 'CTL');
+      check('it says so', /again later/i.test(c.querySelector('.drip-note').textContent),
+        JSON.stringify(c.querySelector('.drip-note').textContent));
       eq2('the position is untouched', (await store.getItem('CTL')).cursor, 1);
 
       // And it resumes exactly there.
@@ -988,35 +995,35 @@
       probe.appendChild(post);
 
       const read = () => ({
-        bg: html.getPropertyValue('--ad-bg'),
-        fg: html.getPropertyValue('--ad-fg'),
+        bg: html.getPropertyValue('--drip-bg'),
+        fg: html.getPropertyValue('--drip-fg'),
       });
 
       // Lights-out, with a foreground that (wrongly) reports near-black --
       // exactly the case that rendered invisible cards.
       probe.style.backgroundColor = 'rgb(0,0,0)';
       post.style.color = 'rgb(15,20,25)';
-      let t = AD.card.refreshTheme(true);
+      let t = DRIP.card.refreshTheme(true);
       check('a dark background is detected as dark', t.dark === true);
       check('an unreadable sampled colour is overridden',
-        AD.card.contrastRatio(t.fg, t.bg) >= 4.5,
+        DRIP.card.contrastRatio(t.fg, t.bg) >= 4.5,
         `contrast ${t.contrast.toFixed(2)} fg ${JSON.stringify(t.fg)}`);
       check('and the published value is light on black',
         /23[01]/.test(read().fg), read().fg);
 
       // A correct dark-theme foreground is left alone.
       post.style.color = 'rgb(231,233,234)';
-      t = AD.card.refreshTheme(true);
+      t = DRIP.card.refreshTheme(true);
       check('a readable sampled colour is kept',
         t.fg.r === 231 && t.fg.g === 233, JSON.stringify(t.fg));
 
       // Light theme.
       probe.style.backgroundColor = 'rgb(255,255,255)';
       post.style.color = 'rgb(231,233,234)'; // now unreadable
-      t = AD.card.refreshTheme(true);
+      t = DRIP.card.refreshTheme(true);
       check('a light background is detected as light', t.dark === false);
       check('unreadable-on-white is also corrected',
-        AD.card.contrastRatio(t.fg, t.bg) >= 4.5,
+        DRIP.card.contrastRatio(t.fg, t.bg) >= 4.5,
         `contrast ${t.contrast.toFixed(2)}`);
 
       probe.remove();
@@ -1032,20 +1039,20 @@
         undefined, 2);
       // Dwell tracking is normally started by inject.start(), which the
       // harness never calls; without it dwellMs keeps its 900ms default.
-      await AD.card.startDwellTracking();
-      inject._resetLayout(); AD.card.releaseAll();
+      await DRIP.card.startDwellTracking();
+      inject._resetLayout(); DRIP.card.releaseAll();
       await inject.sweep();
       check('cards were placed', cards().length > 0, String(cards().length));
 
       const first = cards()[0];
       check('a freshly placed card is not eligible to be counted',
-        AD.card._eligible(first) === false);
+        DRIP.card._eligible(first) === false);
 
       // Simulate it being on screen, as it is on a page load, and wait past
       // the dwell time. Nothing should be consumed.
-      const readItem = first.dataset.adItem;
+      const readItem = first.dataset.dripItem;
       const before = (await store.getItem(readItem)).cursor;
-      AD.card._seeCard(first, true);
+      DRIP.card._seeCard(first, true);
       await new Promise((r) => setTimeout(r, 200));
       eq2('being visible on a freshly loaded page reads nothing',
         (await store.getItem(readItem)).cursor, before);
@@ -1053,8 +1060,8 @@
       // Scroll, and visible cards become eligible and start counting.
       // (Exact counts aren't asserted: the real IntersectionObserver is live
       // here too, so however many cards are genuinely on screen will count.)
-      AD.card._scroll();
-      check('a scroll makes it eligible', AD.card._eligible(first) === true);
+      DRIP.card._scroll();
+      check('a scroll makes it eligible', DRIP.card._eligible(first) === true);
       await new Promise((r) => setTimeout(r, 250));
       const afterScroll = (await store.getItem(readItem)).cursor;
       check('after scrolling, reading progresses', afterScroll > before,
@@ -1063,19 +1070,19 @@
       // A card placed after that scroll starts ineligible all over again, so
       // a fresh injection can't be counted without further scrolling.
       const later = cards()[1];
-      AD.card.track(later);
+      DRIP.card.track(later);
       check('a newly placed card is ineligible again',
-        AD.card._eligible(later) === false);
+        DRIP.card._eligible(later) === false);
 
-      AD.card._seeCard(first, false);
-      AD.card._seeCard(later, false);
+      DRIP.card._seeCard(first, false);
+      DRIP.card._seeCard(later, false);
     }
 
     // MUST be last: teardown is one-shot and global, so everything after it
     // would be running against a dead context.
     section('orphaned content script');
     {
-      const { life } = AD;
+      const { life } = DRIP;
 
       check('recognises the real Chrome message',
         life.isContextError(new Error('Extension context invalidated.')));
@@ -1091,7 +1098,7 @@
 
       // Put a live card on screen so we can watch it get marked inert.
       await fresh(6, 5, { everyNPosts: 3 });
-      inject._resetLayout(); AD.card.releaseAll();
+      inject._resetLayout(); DRIP.card.releaseAll();
       await inject.sweep();
       const before = cards().length;
       check('a card is on screen to begin with', before > 0, String(before));
@@ -1108,7 +1115,7 @@
       check('with their buttons disabled',
         stale.every((c) => [...c.querySelectorAll('button')].every((b) => b.disabled)));
       check('and a note telling you what to do',
-        stale[0].querySelector('.ad-badge').textContent === 'reload tab to resume');
+        stale[0].querySelector('.drip-badge').textContent === 'reload tab to resume');
 
       const at = ticks;
       await new Promise((r) => setTimeout(r, 60));

@@ -1,4 +1,4 @@
-/* Article Drip — inject.js
+/* Dripter — inject.js
  *
  * Slides snippet cards into the rendered home timeline.
  *
@@ -14,10 +14,10 @@
  * torn half the list out and it repairs itself.
  */
 ;(function (root) {
-  root.AD = root.AD || {};
-  const { sel, dom, store, card, life } = root.AD;
+  root.DRIP = root.DRIP || {};
+  const { sel, dom, store, card, life } = root.DRIP;
 
-  const CARD_SELECTOR = '[data-ad-card]';
+  const CARD_SELECTOR = '[data-drip-card]';
 
   let settings = null;
   let sweeping = false;
@@ -115,7 +115,7 @@
       // An orphaned content script (extension reloaded under us) would throw
       // here on every mutation forever. Stop once, quietly.
       if (life.isContextError(e)) life.teardown('the extension was reloaded');
-      else console.warn('[article-drip] sweep failed', e);
+      else console.warn('[dripter] sweep failed', e);
     } finally {
       sweeping = false;
       if (dirty) { dirty = false; setTimeout(sweep, 60); }
@@ -163,7 +163,7 @@
     for (const n of document.querySelectorAll(CARD_SELECTOR)) {
       n.classList.add('is-stale');
       for (const b of n.querySelectorAll('button')) b.disabled = true;
-      const badge = n.querySelector('.ad-badge');
+      const badge = n.querySelector('.drip-badge');
       if (badge) badge.textContent = 'reload tab to resume';
     }
   }
@@ -217,7 +217,7 @@
     markCardsStale();
   });
 
-  root.AD.inject = {
+  root.DRIP.inject = {
     start, sweep, clearCards, refreshSettings,
     // Seams for tests/harness.html, which drives the sweep off-site.
     _setHomeCheck: (fn) => { isHome = fn; },

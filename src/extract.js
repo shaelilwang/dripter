@@ -1,4 +1,4 @@
-/* Article Drip — extract.js
+/* Dripter — extract.js
  *
  * Pulls the full body of a native X Article or a thread out of the page we're
  * currently sitting on, converts it to blocks, and hands it to the chunker.
@@ -6,8 +6,8 @@
  * Runs inside a background tab opened by background.js, then reports back.
  */
 ;(function (root) {
-  root.AD = root.AD || {};
-  const { sel, dom, chunker } = root.AD;
+  root.DRIP = root.DRIP || {};
+  const { sel, dom, chunker } = root.DRIP;
 
   /* ---------------------------------------------------------------- */
   /* native X Articles                                                 */
@@ -143,7 +143,7 @@
       await dom.autoScroll({ maxSteps: 12, settleMs: 450 });
       bodyEl = findProseFallback(1200);
       via = bodyEl ? 'structural-fallback' : null;
-      if (bodyEl) console.info('[article-drip] articleBody selectors missed; ' +
+      if (bodyEl) console.info('[dripter] articleBody selectors missed; ' +
         'used the structural fallback. Run Selector Doctor here and add the ' +
         'real selector to src/selectors.js.');
     }
@@ -305,13 +305,13 @@
     await dom.autoScroll({ maxSteps: 30, settleMs: 650 });
 
     const rootHandle = (expectedHandle ||
-      (root.AD.collect.authorOf(first).handle) || '').toLowerCase();
+      (root.DRIP.collect.authorOf(first).handle) || '').toLowerCase();
 
     const parts = [];
     const seenIds = new Set();
 
     for (const tweetEl of sel.qa('tweet')) {
-      const link = root.AD.collect.permalinkOf(tweetEl);
+      const link = root.DRIP.collect.permalinkOf(tweetEl);
       if (!link) continue;
       if (seenIds.has(link.id)) continue;
 
@@ -395,7 +395,7 @@
    * Returns { ok, snippets, kind, reason }.
    */
   async function extractInto(item) {
-    const store = root.AD.store;
+    const store = root.DRIP.store;
     const settings = await store.getSettings();
 
     // Always try the Article body first, regardless of the recorded kind.
@@ -568,7 +568,7 @@
     // And what we already hold for this page, which is what the card shows.
     const m = location.pathname.match(/\/status\/(\d+)/);
     if (m) {
-      const item = await root.AD.store.getItem(m[1]);
+      const item = await root.DRIP.store.getItem(m[1]);
       report.storedItem = item ? {
         id: item.id,
         title: item.title,
@@ -588,7 +588,7 @@
     return report;
   }
 
-  root.AD.extract = {
+  root.DRIP.extract = {
     extractInto, extractArticle, extractThread,
     blocksFromArticle, dropTitleEcho, findProseFallback, assessBlocks,
     articleTitleFor, threadTitleFrom, titleAboveBody, diagnose,

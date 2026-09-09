@@ -1,4 +1,4 @@
-/* Article Drip — selectors.js
+/* Dripter — selectors.js
  *
  * EVERY x.com DOM selector lives here. Nothing else in this codebase should
  * contain a raw x.com selector string. When X reshuffles their markup (they
@@ -12,7 +12,7 @@
  * tells you which ones return nothing.
  */
 ;(function (root) {
-  root.AD = root.AD || {};
+  root.DRIP = root.DRIP || {};
 
   const SEL = {
     /* ---- timeline / feed structure ---- */
@@ -174,7 +174,7 @@
   /** Resolve a selector key to the first selector string that matches. */
   function pick(key, scope) {
     const list = SEL[key];
-    if (!list) throw new Error(`[article-drip] unknown selector key: ${key}`);
+    if (!list) throw new Error(`[dripter] unknown selector key: ${key}`);
     const ctx = scope || document;
     for (const s of list) {
       try {
@@ -189,7 +189,7 @@
   /** First matching element for a selector key. */
   function q(key, scope) {
     const list = SEL[key];
-    if (!list) throw new Error(`[article-drip] unknown selector key: ${key}`);
+    if (!list) throw new Error(`[dripter] unknown selector key: ${key}`);
     const ctx = scope || document;
     for (const s of list) {
       try {
@@ -203,7 +203,7 @@
   /** All matching elements for the FIRST selector variant that hits. */
   function qa(key, scope) {
     const list = SEL[key];
-    if (!list) throw new Error(`[article-drip] unknown selector key: ${key}`);
+    if (!list) throw new Error(`[dripter] unknown selector key: ${key}`);
     const ctx = scope || document;
     for (const s of list) {
       try {
@@ -340,6 +340,6 @@
     };
   }
 
-  root.AD.SEL = SEL;
-  root.AD.sel = { pick, q, qa, doctor, census };
+  root.DRIP.SEL = SEL;
+  root.DRIP.sel = { pick, q, qa, doctor, census };
 })(globalThis);

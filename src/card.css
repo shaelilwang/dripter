@@ -1,4 +1,4 @@
-/* Article Drip — card.css
+/* Dripter — card.css
  *
  * The card mirrors X's own post anatomy: 40px avatar in a left gutter, a
  * name/handle/meta line, body copy at X's 15px/20px, then a muted action row.
@@ -7,30 +7,30 @@
  * Theme colors are sampled off the live page by card.js and written as inline
  * custom properties on <html>, so the card tracks Default / Dim / Lights-out.
  *
- * IMPORTANT: these fallbacks live on :root, NOT on .ad-card. A custom property
+ * IMPORTANT: these fallbacks live on :root, NOT on .drip-card. A custom property
  * declared on the element itself beats one inherited from <html>, so putting
- * them on .ad-card silently overrode every sampled value and the card rendered
+ * them on .drip-card silently overrode every sampled value and the card rendered
  * white on dark themes.
  */
 
 :root {
-  --ad-bg: #ffffff;
-  --ad-fg: #0f1419;
-  --ad-muted: #536471;
-  --ad-border: #eff3f4;
-  --ad-accent: rgb(29, 155, 240);
-  --ad-lightness: 45%;
+  --drip-bg: #ffffff;
+  --drip-fg: #0f1419;
+  --drip-muted: #536471;
+  --drip-border: #eff3f4;
+  --drip-accent: rgb(29, 155, 240);
+  --drip-lightness: 45%;
 }
 
-.ad-card {
-  --ad-tint: hsl(var(--ad-hue, 210) 62% var(--ad-lightness, 45%));
+.drip-card {
+  --drip-tint: hsl(var(--drip-hue, 210) 62% var(--drip-lightness, 45%));
 
   display: flex;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--ad-border);
-  background: var(--ad-bg);
-  color: var(--ad-fg);
+  border-bottom: 1px solid var(--drip-border);
+  background: var(--drip-bg);
+  color: var(--drip-fg);
   font-family: "TwitterChirp", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
   font-size: 15px;
@@ -40,12 +40,12 @@
 
 /* ---- avatar gutter ---- */
 
-.ad-avatar {
+.drip-avatar {
   flex: 0 0 40px;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--ad-tint);
+  background: var(--drip-tint);
   color: #fff;
   display: flex;
   align-items: center;
@@ -56,28 +56,28 @@
   overflow: hidden;
 }
 
-.ad-avatar svg { width: 20px; height: 20px; fill: currentColor; }
+.drip-avatar svg { width: 20px; height: 20px; fill: currentColor; }
 
 /* ---- content column ---- */
 
-.ad-body {
+.drip-body {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.ad-head {
+.drip-head {
   margin-bottom: 10px;
   min-width: 0;
 }
 
 /* The article's name, sized to be findable while scrolling. Wraps to two
    lines before it truncates — a title cut off at four words is no use. */
-.ad-title {
+.drip-title {
   font-size: 19px;
   line-height: 24px;
   font-weight: 800;
   letter-spacing: -0.012em;
-  color: var(--ad-fg);
+  color: var(--drip-fg);
   margin-bottom: 3px;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -85,7 +85,7 @@
   overflow: hidden;
 }
 
-.ad-sub {
+.drip-sub {
   display: flex;
   align-items: baseline;
   gap: 5px;
@@ -93,8 +93,8 @@
   min-width: 0;
 }
 
-.ad-meta {
-  color: var(--ad-muted);
+.drip-meta {
+  color: var(--drip-muted);
   flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
@@ -102,13 +102,13 @@
   text-overflow: ellipsis;
 }
 
-.ad-dot {
-  color: var(--ad-muted);
+.drip-dot {
+  color: var(--drip-muted);
   flex: 0 0 auto;
 }
 
-.ad-badge {
-  color: var(--ad-tint);
+.drip-badge {
+  color: var(--drip-tint);
   font-weight: 600;
   flex: 0 0 auto;
   white-space: nowrap;
@@ -117,48 +117,48 @@
 
 /* ---- section heading ---- */
 
-.ad-heading {
+.drip-heading {
   font-weight: 700;
   font-size: 16px;
   line-height: 22px;
   margin-bottom: 8px;
-  color: var(--ad-fg);
+  color: var(--drip-fg);
 }
 
 /* ---- snippet text ---- */
 
 /* Reading copy, not tweet copy: looser leading than X's 15/20, because these
    cards carry paragraphs rather than a line or two. */
-.ad-text {
+.drip-text {
   margin: 0;
   font-size: 15px;
   line-height: 24px;
-  color: var(--ad-fg);
+  color: var(--drip-fg);
 
   /* Clamp like X does with its own long posts; "Show more" lifts it. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: var(--ad-clamp, 12);
+  -webkit-line-clamp: var(--drip-clamp, 12);
   overflow: hidden;
 }
 
 /* One block per paragraph, so the gap between them is a real margin rather
    than a single blank line. Single newlines inside a paragraph are kept, so
    a run of list lines stays tight. */
-.ad-p {
+.drip-p {
   margin: 0 0 15px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.ad-p:last-child { margin-bottom: 0; }
+.drip-p:last-child { margin-bottom: 0; }
 
-.ad-card.is-expanded .ad-text {
+.drip-card.is-expanded .drip-text {
   display: block;
   overflow: visible;
 }
 
-.ad-more {
+.drip-more {
   appearance: none;
   border: 0;
   background: transparent;
@@ -166,14 +166,14 @@
   margin: 0;
   font: inherit;
   font-size: 15px;
-  color: var(--ad-accent);
+  color: var(--drip-accent);
   cursor: pointer;
 }
 
-.ad-more:hover { text-decoration: underline; }
+.drip-more:hover { text-decoration: underline; }
 
 /* A section heading inside an article. Distinct, but not a different object. */
-.ad-text.is-heading .ad-p {
+.drip-text.is-heading .drip-p {
   font-weight: 700;
   font-size: 17px;
   line-height: 24px;
@@ -182,15 +182,15 @@
 
 /* ---- inline confirmation ---- */
 
-.ad-note {
+.drip-note {
   margin-top: 8px;
   font-size: 13px;
-  color: var(--ad-tint);
+  color: var(--drip-tint);
 }
 
 /* ---- footer ---- */
 
-.ad-foot {
+.drip-foot {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -199,44 +199,44 @@
   flex-wrap: wrap;
 }
 
-.ad-progress {
+.drip-progress {
   flex: 1 1 auto;
   height: 2px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--ad-fg) 14%, transparent);
+  background: color-mix(in srgb, var(--drip-fg) 14%, transparent);
   overflow: hidden;
   min-width: 40px;
 }
 
-.ad-progress > i {
+.drip-progress > i {
   display: block;
   height: 100%;
-  background: var(--ad-tint);
+  background: var(--drip-tint);
   transition: width 220ms ease;
 }
 
-.ad-actions {
+.drip-actions {
   display: flex;
   gap: 2px;
   flex: 0 0 auto;
   flex-wrap: wrap;
 }
 
-.ad-actions button:disabled {
+.drip-actions button:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
-.ad-actions button:disabled:hover {
+.drip-actions button:disabled:hover {
   background: transparent;
-  color: var(--ad-muted);
+  color: var(--drip-muted);
 }
 
-.ad-actions button {
+.drip-actions button {
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--ad-muted);
+  color: var(--drip-muted);
   font: inherit;
   font-size: 13px;
   line-height: 1;
@@ -247,31 +247,31 @@
   white-space: nowrap;
 }
 
-.ad-actions button:hover {
-  background: color-mix(in srgb, var(--ad-tint) 12%, transparent);
-  color: var(--ad-tint);
+.drip-actions button:hover {
+  background: color-mix(in srgb, var(--drip-tint) 12%, transparent);
+  color: var(--drip-tint);
 }
 
-.ad-actions button:focus-visible {
-  outline: 2px solid var(--ad-accent);
+.drip-actions button:focus-visible {
+  outline: 2px solid var(--drip-accent);
   outline-offset: 1px;
 }
 
-.ad-actions button[data-ad-act="next"] {
-  color: var(--ad-tint);
+.drip-actions button[data-drip-act="next"] {
+  color: var(--drip-tint);
   font-weight: 700;
 }
 
 /* ---- states ---- */
 
-.ad-card.is-advancing .ad-text { opacity: 0.25; transition: opacity 90ms ease; }
-.ad-card.is-stale { opacity: 0.5; }
-.ad-card.is-stale .ad-badge { color: var(--ad-muted); font-weight: 400; }
-.ad-card.is-stale button { cursor: default; }
-.ad-card.is-empty .ad-text { color: var(--ad-muted); }
-.ad-card.is-empty .ad-foot { display: none; }
+.drip-card.is-advancing .drip-text { opacity: 0.25; transition: opacity 90ms ease; }
+.drip-card.is-stale { opacity: 0.5; }
+.drip-card.is-stale .drip-badge { color: var(--drip-muted); font-weight: 400; }
+.drip-card.is-stale button { cursor: default; }
+.drip-card.is-empty .drip-text { color: var(--drip-muted); }
+.drip-card.is-empty .drip-foot { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ad-progress > i,
-  .ad-card.is-advancing .ad-text { transition: none; }
+  .drip-progress > i,
+  .drip-card.is-advancing .drip-text { transition: none; }
 }

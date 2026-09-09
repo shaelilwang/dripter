@@ -265,7 +265,7 @@ async function main() {
   await store.consume('700', 0);
   await store.consume('700', 1);
   const dump = await store.exportAll();
-  eq('export is tagged', dump.format, 'article-drip/v1');
+  eq('export is tagged', dump.format, 'dripter/v1');
 
   // Simulate the other machine: same article, less progress.
   reset();

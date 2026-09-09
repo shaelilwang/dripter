@@ -1,4 +1,4 @@
-# Article Drip — notes for Claude
+# Dripter — notes for Claude
 
 MV3 Chrome extension. Chunks the user's bookmarked X Articles and threads into
 tweet-sized snippets and injects them into the rendered home timeline.
@@ -26,7 +26,7 @@ x.com's structural contract. It is the only way to test `inject.js` and
 
 ## Architecture
 
-Content scripts share one isolated-world global, `AD`. The manifest loads them
+Content scripts share one isolated-world global, `DRIP`. The manifest loads them
 in dependency order (selectors → dom → chunker → store → collect → extract →
 card → inject → main); a file may only reference earlier ones at load time,
 though anything goes at call time.
@@ -118,13 +118,13 @@ O(n^2). `upsertMany()` exists for that reason -- harvest batches a screenful
 into one read/write. Don't reintroduce a per-item `upsertItem` inside a loop.
 
 **Harvest's early stop keys on `scanned`, not `known`.** Re-running a harvest
-without reloading the tab skips posts already marked `adSeen` that session, so
+without reloading the tab skips posts already marked `dripSeen` that session, so
 it reports neither fresh nor known items. An early-stop condition requiring
 `known > 0` silently never fires there and the harvest scrolls to the bottom.
 
-**Card theme vars belong on `:root`, never on `.ad-card`.** `applyTheme()`
+**Card theme vars belong on `:root`, never on `.drip-card`.** `applyTheme()`
 samples X's live colors and writes them as inline properties on `<html>`. A
-custom property declared on `.ad-card` itself beats one inherited from an
+custom property declared on `.drip-card` itself beats one inherited from an
 ancestor, so declaring the fallbacks there silently defeated all of it and the
 card rendered white on Lights-out. The fallbacks live in `:root` for that
 reason -- don't move them back.
@@ -259,7 +259,7 @@ measures zero, and the ResizeObserver alone does not reliably catch the
 transition into the document.
 
 **The card body is one block per paragraph, not a pre-wrap text node.**
-`renderBody()` splits on blank lines and emits an `.ad-p` per paragraph, so
+`renderBody()` splits on blank lines and emits an `.drip-p` per paragraph, so
 the gap between them is a margin rather than a single blank line — a wall of
 text was the complaint. Single newlines stay inside a paragraph (pre-wrap) so
 list runs stay tight. `-webkit-line-clamp` still works over these block

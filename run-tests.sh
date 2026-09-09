@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Article Drip test runner. No dependencies beyond node and python3.
+# Dripter test runner. No dependencies beyond node and python3.
 set -u
 cd "$(dirname "$0")"
 

@@ -2,7 +2,7 @@
 # Build a distributable zip — just the extension, no tests or dev scaffolding.
 set -euo pipefail
 cd "$(dirname "$0")"
-out="article-drip.zip"
+out="dripter.zip"
 rm -f "$out"
 zip -r -q "$out" manifest.json src ui README.md \
   -x '*.DS_Store' -x '__MACOSX/*'

@@ -1,5 +1,5 @@
-/* Article Drip — popup.js */
-const store = globalThis.AD.store;
+/* Dripter — popup.js */
+const store = globalThis.DRIP.store;
 
 const $ = (id) => document.getElementById(id);
 const BOOKMARKS_URL = 'https://x.com/i/bookmarks';
@@ -103,7 +103,7 @@ async function refresh() {
 $('enabled').addEventListener('change', async (e) => {
   await store.setSettings({ enabled: e.target.checked });
   const tab = await activeTab();
-  if (tab) await askTab(tab.id, { type: e.target.checked ? 'AD_RESWEEP' : 'AD_CLEAR_CARDS' });
+  if (tab) await askTab(tab.id, { type: e.target.checked ? 'DRIP_RESWEEP' : 'DRIP_CLEAR_CARDS' });
 });
 
 $('harvest').addEventListener('click', async () => {
@@ -117,7 +117,7 @@ $('harvest').addEventListener('click', async () => {
   $('harvest').disabled = true;
   say('Scrolling your bookmarks… keep this tab open.');
 
-  const res = await askTab(tab.id, { type: 'AD_HARVEST' });
+  const res = await askTab(tab.id, { type: 'DRIP_HARVEST' });
   $('harvest').disabled = false;
 
   if (!res) say('No response from the page. Reload x.com and try again.', 'err');
@@ -133,7 +133,7 @@ $('harvest').addEventListener('click', async () => {
 
 $('fetch').addEventListener('click', async () => {
   say('Opening a background window to read each one…');
-  const res = await chrome.runtime.sendMessage({ type: 'AD_FETCH_BODIES' });
+  const res = await chrome.runtime.sendMessage({ type: 'DRIP_FETCH_BODIES' });
   if (!res || !res.ok) { say((res && res.error) || 'Could not start.', 'err'); return; }
   pollJob();
 });
@@ -141,7 +141,7 @@ $('fetch').addEventListener('click', async () => {
 $('doctor').addEventListener('click', async () => {
   const tab = await activeTab();
   if (!tab) return;
-  const res = await askTab(tab.id, { type: 'AD_DOCTOR' });
+  const res = await askTab(tab.id, { type: 'DRIP_DOCTOR' });
   if (!res || !res.ok) {
     // Don't open the options page here: it would show the PREVIOUS report and
     // read as though this run succeeded on this page.
@@ -160,7 +160,7 @@ $('reread').addEventListener('click', async () => {
   $('reread').disabled = true;
   say('Reading this page… it scrolls to the bottom first, so give it a few seconds.');
 
-  const res = await askTab(tab.id, { type: 'AD_EXTRACT_HERE' });
+  const res = await askTab(tab.id, { type: 'DRIP_EXTRACT_HERE' });
   $('reread').disabled = false;
 
   if (!res) {
@@ -180,7 +180,7 @@ $('diagnose').addEventListener('click', async () => {
   const tab = await activeTab();
   if (!tab) return;
   say('Running the extractor on this page…');
-  const res = await askTab(tab.id, { type: 'AD_DIAGNOSE' });
+  const res = await askTab(tab.id, { type: 'DRIP_DIAGNOSE' });
   if (!res || !res.ok) {
     say('Content script not running in this tab, so nothing was read. ' +
         'Reload the page and try again.', 'err');
@@ -203,7 +203,7 @@ $('opts').addEventListener('click', (e) => {
 function pollJob() {
   clearInterval(jobPoll);
   jobPoll = setInterval(async () => {
-    const res = await chrome.runtime.sendMessage({ type: 'AD_JOB_STATUS' });
+    const res = await chrome.runtime.sendMessage({ type: 'DRIP_JOB_STATUS' });
     const job = res && res.job;
     if (!job) { clearInterval(jobPoll); return; }
 
@@ -232,7 +232,7 @@ function pollJob() {
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === 'AD_HARVEST_PROGRESS') {
+  if (msg && msg.type === 'DRIP_HARVEST_PROGRESS') {
     say(`Scrolling… ${msg.found} new` +
         (msg.revisited ? `, ${msg.revisited} already had.` : ' so far.'));
   }
@@ -253,6 +253,6 @@ chrome.runtime.onMessage.addListener((msg) => {
 })();
 
 refresh();
-chrome.runtime.sendMessage({ type: 'AD_JOB_STATUS' }).then((r) => {
+chrome.runtime.sendMessage({ type: 'DRIP_JOB_STATUS' }).then((r) => {
   if (r && r.job && !r.job.finished) pollJob();
 }).catch(() => {});

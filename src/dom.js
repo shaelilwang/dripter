@@ -1,6 +1,6 @@
-/* Article Drip — dom.js — small helpers shared by the content scripts. */
+/* Dripter — dom.js — small helpers shared by the content scripts. */
 ;(function (root) {
-  root.AD = root.AD || {};
+  root.DRIP = root.DRIP || {};
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -39,7 +39,7 @@
     let stagnant = 0;
     for (let step = 0; step < maxSteps; step++) {
       if (onStep) {
-        try { await onStep(step); } catch (e) { console.warn('[article-drip] onStep', e); }
+        try { await onStep(step); } catch (e) { console.warn('[dripter] onStep', e); }
       }
       if (shouldStop && shouldStop()) break;
       window.scrollTo(0, document.documentElement.scrollHeight);
@@ -107,10 +107,10 @@
     window.addEventListener('popstate', () => setTimeout(fire, 0));
     // Belt and braces; X sometimes swaps views silently. Guarded so it stops
     // itself if the extension is reloaded out from under this tab.
-    root.AD.life.guardedInterval(fire, 700);
+    root.DRIP.life.guardedInterval(fire, 700);
   }
 
-  root.AD.dom = {
+  root.DRIP.dom = {
     sleep, waitFor, waitForStable, autoScroll,
     richText, isOnScreen, hashCode, onRouteChange,
   };

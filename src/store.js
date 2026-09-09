@@ -1,4 +1,4 @@
-/* Article Drip — store.js
+/* Dripter — store.js
  *
  * All persistence. Usable from content scripts, the popup, the options page
  * and the service worker (no DOM dependencies).
@@ -25,7 +25,7 @@
  *   addedAt / fetchedAt / lastSeenAt
  */
 ;(function (root) {
-  root.AD = root.AD || {};
+  root.DRIP = root.DRIP || {};
 
   const DEFAULT_SETTINGS = {
     enabled: true,
@@ -306,7 +306,7 @@
    * fraction, since the old snippet index means nothing once the count moves.
    */
   async function rechunkAll() {
-    const chunker = root.AD && root.AD.chunker;
+    const chunker = root.DRIP && root.DRIP.chunker;
     if (!chunker) throw new Error('chunker not loaded');
 
     const settings = await getSettings();
@@ -464,12 +464,12 @@
 
   async function exportAll() {
     const all = await get(null);
-    return { format: 'article-drip/v1', exportedAt: new Date().toISOString(), data: all };
+    return { format: 'dripter/v1', exportedAt: new Date().toISOString(), data: all };
   }
 
   async function importAll(payload, { merge = true } = {}) {
-    if (!payload || payload.format !== 'article-drip/v1') {
-      throw new Error('Not an Article Drip export file.');
+    if (!payload || payload.format !== 'dripter/v1') {
+      throw new Error('Not an Dripter export file.');
     }
     const incoming = payload.data || {};
     if (!merge) {
@@ -502,6 +502,6 @@
     counts, exportAll, importAll,
   };
 
-  root.AD.store = api;
+  root.DRIP.store = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

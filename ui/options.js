@@ -1,5 +1,5 @@
-/* Article Drip — options.js */
-const store = globalThis.AD.store;
+/* Dripter — options.js */
+const store = globalThis.DRIP.store;
 const $ = (id) => document.getElementById(id);
 
 const NUMBERS = ['everyNPosts', 'maxCards', 'maxChars', 'dwellMs', 'minThreadPosts', 'minPostChars'];
@@ -239,7 +239,7 @@ $('export').addEventListener('click', async () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `article-drip-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `dripter-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 });

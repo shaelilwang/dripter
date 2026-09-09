@@ -1,4 +1,4 @@
-/* Article Drip — chunker.js
+/* Dripter — chunker.js
  *
  * Turns an extracted article into a handful of feed cards, entirely offline.
  *
@@ -21,7 +21,7 @@
  * Runs in the browser and in node (see tests/chunker.test.js).
  */
 ;(function (root) {
-  root.AD = root.AD || {};
+  root.DRIP = root.DRIP || {};
 
   const DEFAULTS = {
     /*
@@ -472,6 +472,6 @@
     DEFAULTS,
   };
 
-  root.AD.chunker = api;
+  root.DRIP.chunker = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

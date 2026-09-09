@@ -1,4 +1,4 @@
-/* Article Drip — collect.js
+/* Dripter — collect.js
  *
  * Harvests the bookmarks page (x.com/i/bookmarks) into the item store.
  * Reads only what's already rendered in your logged-in session — no API,
@@ -8,8 +8,8 @@
  * or a plain post. Bodies are fetched later by extract.js.
  */
 ;(function (root) {
-  root.AD = root.AD || {};
-  const { sel, dom } = root.AD;
+  root.DRIP = root.DRIP || {};
+  const { sel, dom } = root.DRIP;
 
   const STATUS_RE = /\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/;
   const ARTICLE_RE = /\/i\/article\/([A-Za-z0-9_-]+)/;
@@ -106,7 +106,7 @@
     const batch = [];
     const rendered = sel.qa('tweet');
     for (const tweetEl of rendered) {
-      if (tweetEl.dataset.adSeen === '1') continue;
+      if (tweetEl.dataset.dripSeen === '1') continue;
 
       const link = permalinkOf(tweetEl);
       if (!link) continue;
@@ -115,7 +115,7 @@
       const text = textEl ? dom.richText(textEl).replace(/\s+/g, ' ').trim() : '';
       const articleLink = articleLinkOf(tweetEl);
       const kind = classify(tweetEl, text, articleLink, settings);
-      if (!kind) { tweetEl.dataset.adSeen = '1'; continue; }
+      if (!kind) { tweetEl.dataset.dripSeen = '1'; continue; }
 
       // Deliberately no length filter here. X renders a native Article in the
       // bookmarks list as an ordinary, often short, post — the body only
@@ -147,14 +147,14 @@
         preview: text.slice(0, 200),
       });
 
-      tweetEl.dataset.adSeen = '1';
+      tweetEl.dataset.dripSeen = '1';
     }
 
     // One read/write for the whole batch, not one per bookmark.
     // `scanned` counts every rendered post including ones already marked
-    // adSeen this session — the caller needs to distinguish "nothing new
+    // dripSeen this session — the caller needs to distinguish "nothing new
     // here" from "the page hasn't rendered anything yet".
-    const result = await root.AD.store.upsertMany(batch);
+    const result = await root.DRIP.store.upsertMany(batch);
     result.scanned = rendered.length;
     return result;
   }
@@ -179,7 +179,7 @@
    * onProgress({found, step}) lets the popup show a live count.
    */
   async function harvestAll(onProgress) {
-    const settings = await root.AD.store.getSettings();
+    const settings = await root.DRIP.store.getSettings();
     const found = new Set();
 
     const timeline = await dom.waitFor(() => sel.q('timelineRoot'), { timeout: 8000 });
@@ -226,9 +226,9 @@
     });
     window.scrollTo(0, startY);
 
-    await root.AD.store.bumpStats({ lastHarvest: Date.now() });
+    await root.DRIP.store.bumpStats({ lastHarvest: Date.now() });
     return { found: found.size, revisited: revisited.size, stoppedEarly };
   }
 
-  root.AD.collect = { harvestAll, harvestVisible, permalinkOf, authorOf };
+  root.DRIP.collect = { harvestAll, harvestVisible, permalinkOf, authorOf };
 })(globalThis);

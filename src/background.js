@@ -1,4 +1,4 @@
-/* Article Drip — background.js (MV3 service worker)
+/* Dripter — background.js (MV3 service worker)
  *
  * Owns the one job the content scripts can't do alone: visiting each pending
  * bookmark to pull its body.
@@ -11,7 +11,7 @@
  */
 importScripts('/src/store.js');
 
-const AD = globalThis.AD;
+const DRIP = globalThis.DRIP;
 
 const EXTRACT_TIMEOUT_MS = 45000;
 const READY_TIMEOUT_MS = 20000;
@@ -20,7 +20,7 @@ const PAUSE_BETWEEN_MS = 900;
 let job = null;         // { total, done, ok, failed, current, cancelled }
 let workWindowId = null;
 let workTabId = null;
-let readyWaiter = null; // resolve fn for the current AD_CONTENT_READY handshake
+let readyWaiter = null; // resolve fn for the current DRIP_CONTENT_READY handshake
 let keepAlive = null;
 
 /* ------------------------------------------------------------------ */
@@ -102,7 +102,7 @@ async function processItem(item) {
   await chrome.tabs.update(workTabId, { url: item.url || item.statusUrl });
 
   if (!(await ready)) {
-    await AD.store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
+    await DRIP.store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
     return { ok: false, reason: 'page never signalled ready' };
   }
 
@@ -110,10 +110,10 @@ async function processItem(item) {
   await new Promise((r) => setTimeout(r, 1200));
 
   try {
-    const res = await sendWithTimeout(workTabId, { type: 'AD_EXTRACT', item }, EXTRACT_TIMEOUT_MS);
+    const res = await sendWithTimeout(workTabId, { type: 'DRIP_EXTRACT', item }, EXTRACT_TIMEOUT_MS);
     return res && res.ok ? res : { ok: false, reason: (res && (res.reason || res.error)) || 'unknown' };
   } catch (e) {
-    await AD.store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
+    await DRIP.store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
     return { ok: false, reason: String(e.message || e) };
   }
 }
@@ -125,8 +125,8 @@ async function processItem(item) {
 async function runFetchBodies() {
   if (job && !job.finished) return job;
 
-  const settings = await AD.store.getSettings();
-  const items = Object.values(await AD.store.getItems())
+  const settings = await DRIP.store.getSettings();
+  const items = Object.values(await DRIP.store.getItems())
     // `likely !== false` keeps items harvested before the flag existed.
     .filter((i) => i.state === 'pending' &&
       (settings.fetchScope === 'all' || i.likely !== false))
@@ -163,25 +163,25 @@ async function runFetchBodies() {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg.type !== 'string') return;
 
-  if (msg.type === 'AD_CONTENT_READY') {
+  if (msg.type === 'DRIP_CONTENT_READY') {
     const id = sender.tab && sender.tab.id;
     if (readyWaiter && id != null) readyWaiter(id);
     return;
   }
 
-  if (msg.type === 'AD_FETCH_BODIES') {
+  if (msg.type === 'DRIP_FETCH_BODIES') {
     runFetchBodies()
       .then((j) => sendResponse({ ok: true, job: j }))
       .catch((e) => sendResponse({ ok: false, error: String(e.message || e) }));
     return true;
   }
 
-  if (msg.type === 'AD_JOB_STATUS') {
+  if (msg.type === 'DRIP_JOB_STATUS') {
     sendResponse({ ok: true, job });
     return true;
   }
 
-  if (msg.type === 'AD_JOB_CANCEL') {
+  if (msg.type === 'DRIP_JOB_CANCEL') {
     if (job) job.cancelled = true;
     closeWorkWindow();
     stopKeepAlive();
@@ -196,5 +196,5 @@ chrome.windows.onRemoved.addListener((id) => {
 
 chrome.runtime.onInstalled.addListener(async () => {
   // Materialize defaults so the options page has something to show.
-  await AD.store.setSettings({});
+  await DRIP.store.setSettings({});
 });

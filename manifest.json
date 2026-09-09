@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Article Drip",
+  "name": "Dripter",
   "version": "0.2.0",
   "description": "Drips your saved X Articles and threads into your For You feed as tweet-sized snippets, so you actually read them.",
   "permissions": [
@@ -17,7 +17,7 @@
   },
   "action": {
     "default_popup": "ui/popup.html",
-    "default_title": "Article Drip"
+    "default_title": "Dripter"
   },
   "options_page": "ui/options.html",
   "content_scripts": [
