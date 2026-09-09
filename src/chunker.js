@@ -169,15 +169,45 @@
    * which meant the reader saw text the author never wrote.
    */
   function packSentences(text, target) {
+    /*
+     * Line breaks come first, and are preserved exactly.
+     *
+     * splitSentences treats \n as ordinary whitespace, so feeding it the raw
+     * paragraph and rejoining with spaces silently flattened every line break
+     * in it — a post with a lead-in line and a list came out as one unbroken
+     * run of sentences. Split on the author's line breaks, keep the exact
+     * newline runs as separators, and only fall back to sentence boundaries
+     * inside a single line that is too long on its own.
+     */
+    const units = [];
+    let sep = '';
+
+    for (const part of text.split(/(\n+)/)) {
+      if (!part) continue;
+      if (/^\n+$/.test(part)) { sep = part; continue; }
+
+      if (part.length <= target) {
+        units.push({ sep, text: part });
+      } else {
+        const sentences = splitSentences(part);
+        if (sentences.length <= 1) {
+          units.push({ sep, text: part });
+        } else {
+          sentences.forEach((sn, i) => units.push({ sep: i === 0 ? sep : ' ', text: sn }));
+        }
+      }
+      sep = '';
+    }
+
     const out = [];
     let cur = '';
-    for (const sentence of splitSentences(text)) {
-      if (!cur) { cur = sentence; continue; }
-      if (cur.length + 1 + sentence.length <= target) cur += ' ' + sentence;
-      else { out.push(cur); cur = sentence; }
+    for (const u of units) {
+      if (!cur) { cur = u.text; continue; }
+      if (cur.length + u.sep.length + u.text.length <= target) cur += u.sep + u.text;
+      else { out.push(cur); cur = u.text; }
     }
     if (cur) out.push(cur);
-    // No sentence boundaries at all: keep it in one piece.
+
     return out.length ? out : [text];
   }
 

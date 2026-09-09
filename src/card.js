@@ -182,6 +182,8 @@
     more.setAttribute('data-ad-act', 'more');
     body.appendChild(more);
 
+    body.appendChild(el('div', 'ad-note'));
+
     const foot = el('div', 'ad-foot');
     const prog = el('div', 'ad-progress');
     prog.appendChild(document.createElement('i'));
@@ -189,10 +191,12 @@
 
     const acts = el('div', 'ad-actions');
     for (const [act, label, title] of [
-      ['later', 'Later', 'Skip to a different article'],
-      ['done', 'Done', 'Stop dripping this article'],
+      ['back', '‹ Back', 'Go back to the previous part'],
+      ['skip', 'Skip', 'Move past this part without marking it read'],
+      ['later', 'Later', 'Hold this article back; it resumes right here'],
+      ['done', 'Done', 'Finish this article and stop showing it'],
       ['open', 'Open', 'Open the original on X'],
-      ['next', 'Next ›', 'Mark read and load the next snippet here'],
+      ['next', 'Next ›', 'Mark this read and show the next part'],
     ]) {
       const b = el('button', null, label);
       b.type = 'button';
@@ -252,6 +256,15 @@
       d.style.display = isEmpty ? 'none' : '';
     }
 
+    for (const b of card.querySelectorAll('.ad-actions button')) {
+      b.style.display = isEmpty ? 'none' : '';
+    }
+    const backBtn = card.querySelector('[data-ad-act="back"]');
+    if (backBtn) backBtn.disabled = isEmpty || !p.index;
+
+    const noteEl = card.querySelector('.ad-note');
+    if (noteEl) { noteEl.textContent = ''; noteEl.style.display = 'none'; }
+
     const pct = p.total ? Math.round(((p.index + 1) / p.total) * 100) : 0;
     card.querySelector('.ad-progress > i').style.width = pct + '%';
     card.setAttribute('aria-label',
@@ -268,41 +281,34 @@
   /* snippet hand-out                                                  */
   /* ---------------------------------------------------------------- */
 
-  // Highest snippet index already put on screen for each article. Both the
-  // injector (placing new cards) and "Next" (repainting one in place) draw
-  // through here, so two cards can never show the same text at once.
-  // Memory-only by design: a reload re-derives everything from the store.
-  const handedOut = new Map();
-
-  async function takeNext() {
-    const p = await store.peekNext();
-    if (!p) return null;
-
-    const last = handedOut.get(p.itemId);
-    if (last == null || p.index > last) {
-      handedOut.set(p.itemId, p.index);
-      return p;
+  /**
+   * Which articles already have a card on screen.
+   *
+   * Read from the DOM rather than tracked in a variable: it can't go stale
+   * when X recycles the timeline, and it needs no reset.
+   */
+  function displayedItems(except) {
+    const seen = new Set();
+    for (const c of document.querySelectorAll('[data-ad-card]')) {
+      if (c === except) continue;
+      if (c.dataset.adItem) seen.add(c.dataset.adItem);
     }
-
-    // Already on screen — hand out the one after it.
-    const item = await store.getItem(p.itemId);
-    const idx = last + 1;
-    if (!item || !item.snippets || idx >= item.snippets.length) return null;
-
-    handedOut.set(p.itemId, idx);
-    return {
-      itemId: item.id,
-      title: item.title,
-      author: item.author,
-      url: item.url,
-      kind: item.kind,
-      index: idx,
-      total: item.snippets.length,
-      snippet: item.snippets[idx],
-    };
+    return seen;
   }
 
-  const releaseAll = () => handedOut.clear();
+  /**
+   * Next snippet for a NEW card: always from an article not already on
+   * screen, so the feed never shows two pieces of the same piece of writing.
+   *
+   * The previous version handed successive indices of one article to every
+   * insertion point, which is why finishing a card and scrolling on landed
+   * you in "3/24" of the same article — and why pressing Next could jump
+   * several snippets at once, since it had to step past the indices the
+   * other visible cards had already reserved.
+   */
+  const takeNext = (except) => store.peekNext(displayedItems(except));
+
+  const releaseAll = () => {};
 
   /* ---------------------------------------------------------------- */
   /* interaction                                                       */
@@ -319,11 +325,38 @@
     return true;
   }
 
+  /** Move this card on to a different article. */
   async function repaint(card) {
     card.classList.add('is-advancing');
-    const next = await takeNext();
-    render(card, next || EMPTY);
+    render(card, (await takeNext(card)) || EMPTY);
     card.classList.remove('is-advancing');
+  }
+
+  /**
+   * Redraw this card at the given article's current position. Used by Back,
+   * Skip and Next, which all stay within the piece you're reading rather
+   * than throwing you into a different one mid-thought.
+   */
+  async function paintItem(card, itemId) {
+    const payload = await store.peekItem(itemId);
+    if (!payload) return repaint(card);   // article finished
+    card.classList.add('is-advancing');
+    render(card, payload);
+    card.classList.remove('is-advancing');
+  }
+
+  /** Say something on the card without disturbing what it's showing. */
+  let noteTimer = null;
+  function note(card, text) {
+    const el = card.querySelector('.ad-note');
+    if (!el) return;
+    el.textContent = text;
+    el.style.display = '';
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => {
+      el.textContent = '';
+      el.style.display = 'none';
+    }, 3200);
   }
 
   async function onClick(ev) {
@@ -352,14 +385,36 @@
 
     if (act === 'next') {
       await count(card);
-      await repaint(card);
+      if (id) await paintItem(card, id);
+      else await repaint(card);
+      return;
+    }
+
+    if (act === 'back') {
+      if (!id) return;
+      await store.stepBack(id);
+      await paintItem(card, id);
+      return;
+    }
+
+    if (act === 'skip') {
+      if (!id) return;
+      // Mark the card counted so the dwell timer can't also consume it.
+      card.dataset.adCounted = '1';
+      await store.skipForward(id);
+      await paintItem(card, id);
       return;
     }
 
     if (act === 'later') {
-      // Push this article to the back without consuming the snippet.
-      if (id) await store.updateItem(id, { lastShownAt: Date.now() });
-      await repaint(card);
+      // Deliberately does NOT flip the card. Holding an article back and
+      // having it instantly replaced by a different one reads like the
+      // button did something else entirely; and leaving the snippet in place
+      // means it's still here if you change your mind.
+      if (!id) return;
+      await store.snooze(id);
+      card.dataset.adCounted = '1';
+      note(card, 'OK — showing this again later, right where you left it.');
       return;
     }
 
@@ -464,7 +519,8 @@
 
   root.AD.card = {
     create, render, applyTheme, startDwellTracking, track,
-    takeNext, releaseAll, updateClamp, refreshTheme, contrastRatio, EMPTY,
+    takeNext, releaseAll, updateClamp, refreshTheme, contrastRatio,
+    paintItem, displayedItems, EMPTY,
     // Test seams for tests/harness.html.
     _scroll: () => { scrollTick++; for (const c of visible) maybeStartDwell(c); },
     _eligible: (card) => scrolledSincePlacement(card),

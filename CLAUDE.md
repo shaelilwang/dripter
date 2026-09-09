@@ -199,6 +199,30 @@ the reader scrolls afterwards. The scroll handler must also re-check
 already-visible cards: IntersectionObserver fires on intersection CHANGES, so
 a card that stays on screen would otherwise never be re-evaluated.
 
+**One card per article, enforced by `peekNext(exclude)`.** `card.takeNext()`
+passes the ids already rendered, read from the DOM so it cannot go stale. This
+replaced a `handedOut` map that dealt successive indices of one article to
+every insertion point — which is why Next appeared to jump three or four
+snippets at once, since it had to step past indices the other visible cards
+had reserved. Don't reintroduce per-index reservation.
+
+**Back / Skip / Next stay inside the article** via `paintItem()`; only `Done`
+and an exhausted article move the card on with `repaint()`. `Later` calls
+`store.snooze()` and deliberately does NOT change what the card shows — being
+instantly replaced reads like the button did something else. The snooze holds
+an article back only while something else is available.
+
+**`packSentences` splits on line breaks first.** `splitSentences` treats \n as
+ordinary whitespace, so feeding it a whole paragraph and rejoining with spaces
+flattened every line break — a post with a lead-in line and a list came back as
+one unbroken run. Split on `/(\n+)/`, keep the exact newline runs as
+separators, and fall back to sentences only inside an over-long single line.
+
+**Clamp measurement happens after insertion**, from `inject.sweep()` once the
+node is attached. `render()` runs while it is still detached where everything
+measures zero, and the ResizeObserver alone does not reliably catch the
+transition into the document.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or

@@ -216,6 +216,37 @@ console.log('\ncards per article cap');
     out.map((s) => s.text).join(' ').includes('Alpha'), JSON.stringify(out));
 }
 
+console.log('\nline breaks survive splitting');
+{
+  // A long post with a lead-in line and a list. Splitting it used to flatten
+  // every newline into a space, because splitSentences treats \n as ordinary
+  // whitespace and the pieces were rejoined with ' '.
+  const post = '1. Electronics fundamentals\n' +
+    ('- A bullet line that is reasonably long so the whole post overruns. '.repeat(20));
+  const out = C.chunk([{ type: 'para', atomic: true, text: post }], { maxChars: 400 });
+  check('it did split', out.length > 1, `got ${out.length}`);
+  check('the lead-in keeps its own line',
+    out[0].text.startsWith('1. Electronics fundamentals\n'),
+    JSON.stringify(out[0].text.slice(0, 50)));
+  check('no card is a single flattened run',
+    out.some((x) => x.text.includes('\n')),
+    JSON.stringify(out.map((x) => x.text.includes('\n'))));
+}
+{
+  // Paragraph breaks inside one block survive too.
+  const body = 'First paragraph here. '.repeat(12) + '\n\n' +
+               'Second paragraph here. '.repeat(12);
+  const out = C.chunk([{ type: 'para', text: body }], { maxChars: 5000 });
+  eq('it stays one card', out.length, 1);
+  check('the blank line between paragraphs is intact',
+    out[0].text.includes('\n\n'), JSON.stringify(out[0].text.slice(250, 300)));
+}
+{
+  // Sentences within a line are still joined with a space, not jammed up.
+  const out = C.chunk([{ type: 'para', text: 'One thing. Two things. Three things.' }]);
+  eq('sentences keep their space', out[0].text, 'One thing. Two things. Three things.');
+}
+
 console.log('\nenough cards to interleave');
 {
   // A single long post with no headings used to collapse to one card, so the

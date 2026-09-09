@@ -203,6 +203,75 @@ async function main() {
   eq('removeMany drops finished', await store.removeMany('done'), 3);
   eq('library is empty', (await store.counts()).total, 0);
 
+  console.log('\none article on screen at a time');
+  reset();
+  await store.setSettings({ order: 'sequential' });
+  await seed('A1', 5);
+  await new Promise((r) => setTimeout(r, 5));
+  await seed('A2', 5);
+
+  eq('picks the first article', (await store.peekNext()).itemId, 'A1');
+  eq('excluding it moves to the next',
+    (await store.peekNext(new Set(['A1']))).itemId, 'A2');
+  eq('excluding both offers nothing',
+    await store.peekNext(new Set(['A1', 'A2'])), null);
+  eq('exclusion does not disturb the cursor', (await store.getItem('A1')).cursor, 0);
+
+  console.log('\nback and skip');
+  reset();
+  await seed('B1', 4);
+  await store.consume('B1', 0);
+  await store.consume('B1', 1);
+  eq('two consumed', (await store.getItem('B1')).cursor, 2);
+
+  await store.stepBack('B1');
+  eq('back steps one', (await store.getItem('B1')).cursor, 1);
+  eq('and it is offered again', (await store.peekNext()).snippet.text, 'B1-snippet-1');
+  await store.stepBack('B1');
+  await store.stepBack('B1');
+  eq('back stops at the beginning', (await store.getItem('B1')).cursor, 0);
+
+  const readsBefore = (await store.getStats()).snippetsRead;
+  await store.skipForward('B1');
+  eq('skip advances', (await store.getItem('B1')).cursor, 1);
+  eq('but is not counted as reading',
+    (await store.getStats()).snippetsRead, readsBefore);
+
+  reset();
+  await seed('B2', 2);
+  await store.skipForward('B2');
+  await store.skipForward('B2');
+  eq('skipping to the end finishes the article',
+    (await store.getItem('B2')).state, 'done');
+
+  console.log('\nlater resumes where you left it');
+  reset();
+  await seed('C1', 6);
+  await new Promise((r) => setTimeout(r, 5));
+  await seed('C2', 6);
+  await store.consume('C1', 0);
+  await store.consume('C1', 1);
+  await store.consume('C1', 2);
+  eq('mid-article', (await store.getItem('C1')).cursor, 3);
+
+  await store.snooze('C1');
+  eq('a snoozed article steps aside', (await store.peekNext()).itemId, 'C2');
+  eq('without losing its place', (await store.getItem('C1')).cursor, 3);
+  eq('and nothing was consumed by snoozing',
+    (await store.getStats()).snippetsRead, 3);
+
+  eq('it can still be asked for directly',
+    (await store.peekItem('C1')).index, 3);
+  eq('resuming shows 4 of 6', (await store.peekItem('C1')).total, 6);
+
+  await store.markDone('C2');
+  eq('with nothing else left, the snoozed one comes back',
+    (await store.peekNext()).itemId, 'C1');
+  eq('still at the same place', (await store.peekNext()).index, 3);
+
+  await store.snooze('C1', -1000);
+  eq('an elapsed snooze is over', (await store.peekNext()).itemId, 'C1');
+
   console.log('\nexport / import');
   reset();
   await seed('700', 5);

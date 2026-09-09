@@ -98,12 +98,17 @@
       // Insert one at a time so each gets a distinct snippet.
       for (const cell of pending) {
         if (!cell.isConnected) continue;
-        const payload = await card.takeNext();
+        const payload = await card.takeNext();  // excludes articles already on screen
         if (!payload) break; // queue exhausted
         const node = card.create(payload);
         stopObserving();
         placeCard(cell, node);
         startObserving();
+        // Measure the clamp now the node is attached and can be laid out.
+        // render() runs while it is still detached, where everything measures
+        // zero, and the ResizeObserver alone has proved unreliable at
+        // catching the transition into the document.
+        card.updateClamp(node);
         card.track(node);
       }
     } catch (e) {

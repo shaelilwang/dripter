@@ -32,6 +32,7 @@
     everyNPosts: 4,        // insert a card after every N real posts
     maxChars: 1000,        // rough card size; splits only at author boundaries
     maxCards: 0,           // optional hard cap on cards per article; 0 = off
+    snoozeMs: 20 * 60 * 1000,  // how long "Later" holds an article back
     order: 'sequential',   // 'sequential' | 'roundRobin' | 'shuffle'
     autoAdvance: false,    // tapping Next loads the following snippet in place
     markReadOnView: true,  // count a snippet read once it's been on screen
@@ -178,14 +179,48 @@
     (it.state === 'ready' || it.state === 'reading') &&
     it.snippets && it.cursor < it.snippets.length;
 
+  /** Build the payload a card renders from, for a given item at its cursor. */
+  function payloadFor(item) {
+    if (!item || !item.snippets || item.cursor >= item.snippets.length) return null;
+    return {
+      itemId: item.id,
+      title: item.title,
+      author: item.author,
+      url: item.url,
+      kind: item.kind,
+      index: item.cursor,
+      total: item.snippets.length,
+      snippet: item.snippets[item.cursor],
+    };
+  }
+
+  /** The payload for one specific article, wherever its cursor sits. */
+  async function peekItem(id) {
+    return payloadFor(await getItem(id));
+  }
+
   /**
    * Pick the next snippet to show, honoring the reading order setting.
    * Does NOT advance the cursor — call consume() once it's actually read.
+   *
+   * `exclude` is the set of article ids already on screen. Only one card per
+   * article is ever shown: reading one card and then scrolling into "3/24" of
+   * the same article further down the feed is disorienting, and it was also
+   * what made Next jump several snippets at once.
    */
-  async function peekNext() {
+  async function peekNext(exclude) {
     const settings = await getSettings();
     const items = await getItems();
-    const live = Object.values(items).filter(isLive);
+
+    let live = Object.values(items).filter(isLive);
+    if (exclude && exclude.size) live = live.filter((i) => !exclude.has(i.id));
+
+    // "Later" holds an article back, but only while something else is
+    // available — being snoozed should never mean nothing to read.
+    const now = Date.now();
+    const awake = live.filter((i) => !i.snoozedUntil || i.snoozedUntil <= now);
+    if (awake.length) live = awake;
+
     if (!live.length) return null;
 
     let item;
@@ -203,16 +238,12 @@
       item = pool[0];
     }
 
-    return {
-      itemId: item.id,
-      title: item.title,
-      author: item.author,
-      url: item.url,
-      kind: item.kind,
-      index: item.cursor,
-      total: item.snippets.length,
-      snippet: item.snippets[item.cursor],
-    };
+    return payloadFor(item);
+  }
+
+  /** The payload for one specific article, wherever its cursor sits. */
+  async function peekItem(id) {
+    return payloadFor(await getItem(id));
   }
 
   /** Mark the snippet at `index` as read and advance. Idempotent. */
@@ -234,8 +265,48 @@
     return it;
   }
 
+  /** Step back one snippet, so you can re-read what you just passed. */
+  async function stepBack(id) {
+    const items = await getItems();
+    const it = items[id];
+    if (!it || !it.snippets || !it.snippets.length) return null;
+    if ((it.cursor || 0) <= 0) return it;
+
+    it.cursor = it.cursor - 1;
+    it.state = it.cursor > 0 ? 'reading' : 'ready';
+    items[id] = it;
+    await set({ items });
+    return it;
+  }
+
+  /** Move past a snippet without counting it as read. */
+  async function skipForward(id) {
+    const items = await getItems();
+    const it = items[id];
+    if (!it || !it.snippets) return null;
+    if (it.cursor >= it.snippets.length) return it;
+
+    it.cursor = it.cursor + 1;
+    it.state = it.cursor >= it.snippets.length ? 'done' : 'reading';
+    items[id] = it;
+    await set({ items });
+    return it;
+  }
+
+  /**
+   * Hold an article back for a while without consuming anything, so it
+   * resumes at exactly the snippet you left it on.
+   */
+  async function snooze(id, ms) {
+    const settings = await getSettings();
+    return updateItem(id, {
+      snoozedUntil: Date.now() + (ms || settings.snoozeMs),
+      lastShownAt: Date.now(),
+    });
+  }
+
   async function resetItem(id) {
-    return updateItem(id, { cursor: 0, state: 'ready' });
+    return updateItem(id, { cursor: 0, state: 'ready', snoozedUntil: 0 });
   }
   async function markDone(id) {
     return updateItem(id, { state: 'done' });
@@ -382,7 +453,8 @@
     getSettings, setSettings,
     getStats, bumpStats,
     getItems, getItem, upsertItem, upsertMany, updateItem, removeItem,
-    setSnippets, peekNext, consume, resetItem, markDone,
+    setSnippets, peekNext, peekItem, consume, resetItem, markDone,
+    stepBack, skipForward, snooze,
     markManyDone, retryFailed, removeMany, rechunkAll,
     counts, exportAll, importAll,
   };

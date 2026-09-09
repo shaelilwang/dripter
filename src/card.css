@@ -164,6 +164,14 @@
   letter-spacing: -0.01em;
 }
 
+/* ---- inline confirmation ---- */
+
+.ad-note {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ad-tint);
+}
+
 /* ---- footer ---- */
 
 .ad-foot {
@@ -171,7 +179,8 @@
   align-items: center;
   gap: 12px;
   margin-top: 10px;
-  max-width: 425px; /* matches the width of X's own action row */
+  max-width: 520px;
+  flex-wrap: wrap;
 }
 
 .ad-progress {
@@ -194,6 +203,17 @@
   display: flex;
   gap: 2px;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.ad-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ad-actions button:disabled:hover {
+  background: transparent;
+  color: var(--ad-muted);
 }
 
 .ad-actions button {

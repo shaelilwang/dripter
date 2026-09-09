@@ -105,9 +105,21 @@ Snippets also clear themselves as you read: a card that stays on screen for
 after" setting, and the switch above it turns it off if you'd rather only
 advance by pressing **Next ›**.
 
-**Card buttons** — `Later` moves to a different article without consuming the
-snippet, `Done` retires the article, `Open` opens the original, `Next ›` marks
-this one read and loads the following snippet in place.
+**Card buttons**
+
+| Button | What it does |
+|---|---|
+| `‹ Back` | Previous part of this article. Disabled on the first one. |
+| `Skip` | Move past this part without counting it as read. |
+| `Later` | Hold this article back for a while. Confirms in place rather than flipping, and resumes on exactly the part you left. |
+| `Done` | Finish this article; it stops appearing. |
+| `Open` | Open the original on X. |
+| `Next ›` | Mark this part read and show the next one. |
+
+**Only one card per article is ever on screen.** Finishing a card and then
+scrolling into part 3 of the same piece further down was disorienting, so each
+injected card comes from a different article. With one article queued you get
+one card; with five, up to five.
 
 ---
 

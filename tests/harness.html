@@ -129,19 +129,24 @@
         (_, i) => ({ text: `${id} · snippet ${i}`, kind: i === 0 ? 'heading' : 'para' })));
     }
 
-    async function fresh(nCells, nSnippets, settings, opts) {
+    /**
+     * Seed `nArticles` articles. Only one card per article is ever shown, so
+     * a test that wants N cards on screen needs N articles to draw from.
+     */
+    async function fresh(nCells, nSnippets, settings, opts, nArticles) {
       __resetStorage();
       inject._resetLayout();
       inject.clearCards();
       await store.setSettings(Object.assign({ everyNPosts: 4, markReadOnView: false }, settings || {}));
       await inject._reload();
-      await seedArticle('900', nSnippets);
+      const n = nArticles || 1;
+      for (let a = 0; a < n; a++) await seedArticle(String(900 + a), nSnippets);
       buildFeed(nCells, opts);
     }
 
     /* ---------------------------------------------------------------- */
     section('spacing');
-    await fresh(12, 50, { everyNPosts: 4 });
+    await fresh(12, 50, { everyNPosts: 4 }, undefined, 3);
     await inject.sweep();
     check('inserts one card per N posts', cards().length === 3, `got ${cards().length}, expected 3`);
 
@@ -168,9 +173,11 @@
       const texts = cardTexts();
       check('no two visible cards show the same snippet',
         new Set(texts).size === texts.length, JSON.stringify(texts));
-      check('snippets come out in order',
-        texts.join('|') === ['900 · snippet 0', '900 · snippet 1', '900 · snippet 2'].join('|'),
-        JSON.stringify(texts));
+      check('each card is a different article',
+        new Set(cards().map((c) => c.dataset.adItem)).size === cards().length,
+        JSON.stringify(cards().map((c) => c.dataset.adItem)));
+      check('each starts at its own first snippet',
+        texts.every((t) => /snippet 0$/.test(t)), JSON.stringify(texts));
       check('heading snippet is styled as one',
         cards()[0].querySelector('.ad-text').classList.contains('is-heading'));
     }
@@ -213,9 +220,11 @@
     }
 
     section('queue exhaustion');
-    await fresh(40, 3, { everyNPosts: 4 });
+    // Ten insertion points, but only three articles to draw from.
+    await fresh(40, 3, { everyNPosts: 4 }, undefined, 3);
     await inject.sweep();
-    check('stops once snippets run out', cards().length === 3, `got ${cards().length}`);
+    check('stops once every article is on screen', cards().length === 3,
+      `got ${cards().length}`);
     check('inserts no empty-state cards mid-feed',
       cards().every((c) => !c.classList.contains('is-empty')));
 
@@ -225,7 +234,7 @@
     check('injects nothing when switched off', cards().length === 0, `got ${cards().length}`);
 
     section('absolute-positioned timeline');
-    await fresh(12, 50, { everyNPosts: 4 }, { absolute: true });
+    await fresh(12, 50, { everyNPosts: 4 }, { absolute: true }, 3);
     await inject.sweep();
     check('still injects', cards().length === 3, `got ${cards().length}`);
     check('nests inside the cell instead of after it',
@@ -234,7 +243,7 @@
     check('idempotent in absolute mode too', cards().length === 3, `got ${cards().length}`);
 
     section('advancing');
-    await fresh(12, 50, { everyNPosts: 4 });
+    await fresh(12, 50, { everyNPosts: 4 }, undefined, 3);
     inject._resetLayout();
     await inject.sweep();
     {
@@ -495,17 +504,25 @@
 
     section('card rendering');
     {
-      await fresh(12, 0, { everyNPosts: 3 });
-      await store.upsertItem({ id: 'CR', url: 'u', kind: 'article',
-        title: 'A Article', author: { name: 'A', handle: 'a' } });
+      // One card per article, so three cards means three articles.
+      __resetStorage();
+      inject._resetLayout(); inject.clearCards();
+      await store.setSettings({ everyNPosts: 3, markReadOnView: false });
+      await inject._reload();
+
       // Comfortably past the 12-line clamp at any plausible column width.
       const longRun = 'This section runs on at length so the card has to clamp it. '.repeat(30);
-      await store.setSnippets('CR', [
-        { text: 'Short body under a heading.', kind: 'para', heading: 'Section One' },
-        { text: longRun, kind: 'para', heading: 'Section Two' },
-        { text: 'No heading on this one.', kind: 'para', heading: null },
-      ]);
-      inject._resetLayout(); AD.card.releaseAll();
+      const cases = [
+        ['CR1', { text: 'Short body under a heading.', kind: 'para', heading: 'Section One' }],
+        ['CR2', { text: longRun, kind: 'para', heading: 'Section Two' }],
+        ['CR3', { text: 'No heading on this one.', kind: 'para', heading: null }],
+      ];
+      for (const [id, snippet] of cases) {
+        await store.upsertItem({ id, url: 'u', kind: 'article',
+          title: 'Article ' + id, author: { name: 'A', handle: 'a' } });
+        await store.setSnippets(id, [snippet]);
+      }
+      buildFeed(12);
       await inject.sweep();
       await new Promise((r) => setTimeout(r, 250));
 
@@ -598,6 +615,84 @@
       await store.setSettings({ incrementalHarvest: true });
     }
 
+    section('one article per card');
+    {
+      __resetStorage();
+      inject._resetLayout(); inject.clearCards();
+      await store.setSettings({ everyNPosts: 3, markReadOnView: false });
+      await inject._reload();
+      // Two articles, plenty of snippets each.
+      for (const id of ['P1', 'P2']) {
+        await store.upsertItem({ id, url: 'u', kind: 'article',
+          title: 'Article ' + id, author: { name: 'A', handle: 'a' } });
+        await store.setSnippets(id, Array.from({ length: 12 },
+          (_, i) => ({ text: `${id} part ${i}`, kind: 'para' })));
+      }
+      buildFeed(20);
+      await inject.sweep();
+
+      const ids = cards().map((c) => c.dataset.adItem);
+      check('never two cards from the same article',
+        new Set(ids).size === ids.length, JSON.stringify(ids));
+      check('at most one card per available article',
+        cards().length <= 2, `${cards().length} cards for 2 articles`);
+      check('both articles get a turn', new Set(ids).size === 2, JSON.stringify(ids));
+    }
+
+    section('card controls');
+    {
+      __resetStorage();
+      inject._resetLayout(); inject.clearCards();
+      await store.setSettings({ everyNPosts: 3, markReadOnView: false });
+      await inject._reload();
+      await store.upsertItem({ id: 'CTL', url: 'u', kind: 'article',
+        title: 'Controls', author: { name: 'A', handle: 'a' } });
+      await store.setSnippets('CTL', Array.from({ length: 6 },
+        (_, i) => ({ text: `part ${i}`, kind: 'para' })));
+      buildFeed(6);
+      await inject.sweep();
+
+      const c = cards()[0];
+      const press = async (act) => {
+        c.querySelector(`[data-ad-act="${act}"]`).click();
+        await new Promise((r) => setTimeout(r, 120));
+      };
+      const badge = () => c.querySelector('.ad-badge').textContent;
+
+      eq2('starts at the first part', badge(), 'drip 1/6');
+      check('back is disabled at the start',
+        c.querySelector('[data-ad-act="back"]').disabled === true);
+
+      await press('next');
+      eq2('next advances exactly one', badge(), 'drip 2/6');
+      await press('next');
+      eq2('and again, one at a time', badge(), 'drip 3/6');
+      check('back is now available',
+        c.querySelector('[data-ad-act="back"]').disabled === false);
+
+      await press('back');
+      eq2('back goes to the previous part', badge(), 'drip 2/6');
+      eq2('and stays on the same article', c.dataset.adItem, 'CTL');
+
+      const readsBefore = (await store.getStats()).snippetsRead;
+      await press('skip');
+      eq2('skip moves on', badge(), 'drip 3/6');
+      eq2('without counting as read',
+        (await store.getStats()).snippetsRead, readsBefore);
+
+      // Later: confirms in place, does not flip the content.
+      const shown = c.querySelector('.ad-text').textContent;
+      await press('later');
+      eq2('later leaves the text alone', c.querySelector('.ad-text').textContent, shown);
+      eq2('and stays on the same article', c.dataset.adItem, 'CTL');
+      check('it says so', /again later/i.test(c.querySelector('.ad-note').textContent),
+        JSON.stringify(c.querySelector('.ad-note').textContent));
+      eq2('the position is untouched', (await store.getItem('CTL')).cursor, 2);
+
+      // And it resumes exactly there.
+      eq2('resuming shows the same part', (await store.peekItem('CTL')).index, 2);
+    }
+
     section('theme contrast');
     {
       const html = document.documentElement.style;
@@ -649,7 +744,9 @@
       // On a page load, a card lands inside the opening viewport. Visibility
       // alone used to count it as read within a second, so every refresh
       // silently advanced the article.
-      await fresh(9, 20, { everyNPosts: 3, markReadOnView: true, dwellMs: 40 });
+      // Two articles so there is a second card to test re-placement with.
+      await fresh(9, 20, { everyNPosts: 3, markReadOnView: true, dwellMs: 40 },
+        undefined, 2);
       // Dwell tracking is normally started by inject.start(), which the
       // harness never calls; without it dwellMs keeps its 900ms default.
       await AD.card.startDwellTracking();
@@ -663,11 +760,12 @@
 
       // Simulate it being on screen, as it is on a page load, and wait past
       // the dwell time. Nothing should be consumed.
-      const before = (await store.getItem('900')).cursor;
+      const readItem = first.dataset.adItem;
+      const before = (await store.getItem(readItem)).cursor;
       AD.card._seeCard(first, true);
       await new Promise((r) => setTimeout(r, 200));
       eq2('being visible on a freshly loaded page reads nothing',
-        (await store.getItem('900')).cursor, before);
+        (await store.getItem(readItem)).cursor, before);
 
       // Scroll, and visible cards become eligible and start counting.
       // (Exact counts aren't asserted: the real IntersectionObserver is live
@@ -675,7 +773,7 @@
       AD.card._scroll();
       check('a scroll makes it eligible', AD.card._eligible(first) === true);
       await new Promise((r) => setTimeout(r, 250));
-      const afterScroll = (await store.getItem('900')).cursor;
+      const afterScroll = (await store.getItem(readItem)).cursor;
       check('after scrolling, reading progresses', afterScroll > before,
         `${before} then ${afterScroll}`);
 
