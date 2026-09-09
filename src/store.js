@@ -260,7 +260,10 @@
     for (const it of Object.values(items)) {
       if (!it.blocks || !it.blocks.length) { skipped++; continue; }
 
-      const snippets = chunker.chunk(it.blocks, { maxChars: settings.maxChars });
+      const snippets = chunker.chunk(it.blocks, {
+        maxCards: settings.maxCards,
+        maxChars: settings.maxChars,
+      });
       if (!snippets.length) { skipped++; continue; }
 
       const oldTotal = (it.snippets || []).length;

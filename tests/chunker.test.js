@@ -213,41 +213,64 @@ console.log('\ncards per article cap');
     out.map((s) => s.text).join(' ').includes('Alpha'), JSON.stringify(out));
 }
 
-console.log('\nheading runaway guard');
+console.log('\nheadings come only from markup');
 {
-  // Fragmented extraction: a list of titles, no prose. Every line reads as a
-  // heading, which produced cards that were all bold fragments and no content.
+  // Title-shaped lines with no markup behind them stay prose and stay put.
   const fragments = [
     'Judge the Work Instead of the Answer',
     'The Cost of Being Wrong',
     'What Frontier Labs Know',
-    'Codified Knowledge',
-    'A Shorter Path',
   ].map((t) => ({ text: t }));
 
   const out = C.chunk(fragments);
-  const headings = out.filter((s) => s.kind === 'heading').length;
-  check('stops trusting the heuristic when most blocks look like headings',
-    headings === 0, `${headings} of ${out.length} came back as headings`);
+  check('title-shaped lines are not promoted to headings',
+    out.every((s) => s.kind === 'para' && s.heading === null),
+    JSON.stringify(out.map((s) => [s.kind, s.heading])));
   const all = out.map((s) => s.text).join('\n');
-  check('every fragment is still kept',
+  check('every line is still kept verbatim',
     fragments.every((f) => all.includes(f.text)), JSON.stringify(all));
 }
 {
-  // A genuine article: one heading among real prose. The heuristic should
-  // still fire here — the guard must not disable it wholesale.
+  // Untyped blocks are NEVER promoted to headings. Guessing from text shape
+  // invented structure the author didn't write — a thread post opening
+  // "1. Electronics fundamentals" became a bold header lifted out of its body.
   const blocks = [
     { text: 'Why This Matters' },
     { text: 'The rollout touched every service in the fleet, and the team had already burned its error budget.' },
     { text: 'Staging it across three regions was the only option left on the table that week.' },
-    { text: 'Nobody wants to talk about the scheduler incident anymore, for reasons that are entirely fair.' },
   ];
   const out = C.chunk(blocks);
-  eq('a lone heading among prose is still detected', out[0].heading, 'Why This Matters');
-  check('the prose is carried as body, not as a heading card',
-    out.every((s) => s.kind === 'para'));
-  check('the heading is not repeated in the body',
-    !out[0].text.startsWith('Why This Matters'), out[0].text.slice(0, 40));
+  eq('no heading is invented from an untyped block', out[0].heading, null);
+  check('the line stays in the body, exactly as written',
+    out[0].text.startsWith('Why This Matters'), out[0].text.slice(0, 40));
+  check('everything is prose', out.every((s) => s.kind === 'para'));
+}
+{
+  // A numbered lead-in line is prose, not a header. This is the exact shape
+  // from the reported thread.
+  const out = C.chunk([{
+    type: 'para', atomic: true,
+    text: '1. Electronics fundamentals\n' +
+          '- Ohm\u2019s law and voltage dividers until they are automatic\n' +
+          '- Current draw, and why a motor stalling browns out your microcontroller',
+  }]);
+  eq('the post is one card', out.length, 1);
+  eq('no header is lifted out of it', out[0].heading, null);
+  check('the lead-in line is still there',
+    out[0].text.startsWith('1. Electronics fundamentals'));
+  check('the author\u2019s own dashes are untouched',
+    out[0].text.includes('- Ohm\u2019s law'), out[0].text.slice(0, 60));
+  check('no bullet glyph was substituted in', !out[0].text.includes('\u2022'));
+}
+{
+  // Explicit markup still works, because the source really did say <h2>.
+  const out = C.chunk([
+    { type: 'heading', text: 'Why This Matters' },
+    { type: 'para', text: 'The rollout touched every service in the fleet.' },
+  ]);
+  eq('an explicit heading is honoured', out[0].heading, 'Why This Matters');
+  check('and is not duplicated in the body',
+    !out[0].text.includes('Why This Matters'));
 }
 {
   // Explicit types from the extractor always win over the guard.
@@ -260,11 +283,7 @@ console.log('\nheading runaway guard');
   check('explicit heading blocks are always honoured',
     out.every((s) => s.kind === 'heading'));
 }
-{
-  eq('a mid-sentence fragment is never a heading',
-    C.looksLikeHeading('and then the whole thing fell over'), false);
-  eq('a real heading still is', C.looksLikeHeading('Why This Matters'), true);
-}
+
 
 console.log('\npacking');
 {

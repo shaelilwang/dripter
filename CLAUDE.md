@@ -156,6 +156,38 @@ and alters the text.
 **Harvest reads `/i/history` as well as `/i/bookmarks`.** Same markup, and it
 is where the user actually browses.
 
+**The text is never altered. This is a hard rule the user has restated three
+times.** No injected bullet glyphs, no added quote marks, no ellipses, no
+rewording. `maxChars` defaults to 0 for exactly this reason. If you find
+yourself adding a character the source didn't have, stop.
+
+**A heading is only a heading if the markup said so.** `toSections` honours
+`type: 'heading'` and nothing else. Inferring one from text shape promoted a
+thread post's opening line ("1. Electronics fundamentals") into a bold header
+and lifted it out of its own body — inventing structure the author never
+wrote. `looksLikeHeading` and the heading-runaway guard it required are both
+gone; don't reintroduce either.
+
+**Settings must actually reach the chunker.** `maxCards` was added to the
+options page and defaults but never passed by `extractInto` or `rechunkAll`,
+so the cap silently did nothing and articles still came out at 50 cards. Both
+call sites pass the full settings now.
+
+**Never trust a sampled colour.** `applyTheme` reads the foreground from real
+post text (`themeProbeFg`), because `<body>`'s colour on x.com is often the
+light-theme default even in Dim/Lights-out — which rendered near-black cards
+on a black background. Whatever is sampled is then checked with
+`contrastRatio()` against the sampled background and replaced if it is below
+4.5:1.
+
+**Visibility is not reading.** Cards get injected a few posts down, often
+inside the opening viewport, so dwell-on-screen alone counted them as read
+within a second of every page load — refreshing burned through snippets. A
+card is stamped with `scrollTick` when placed and only becomes eligible once
+the reader scrolls afterwards. The scroll handler must also re-check
+already-visible cards: IntersectionObserver fires on intersection CHANGES, so
+a card that stays on screen would otherwise never be re-evaluated.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or

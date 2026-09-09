@@ -108,6 +108,14 @@
       'main[role="main"]',
       'body',
     ],
+    // Sample the foreground from actual post text: <body>'s colour on x.com
+    // is often the light-theme default even in Dim or Lights-out, which
+    // rendered our cards with near-black text on a black background.
+    themeProbeFg: [
+      'div[data-testid="tweetText"]',
+      'article[data-testid="tweet"] div[dir="auto"]',
+      '[data-testid="primaryColumn"]',
+    ],
     themeProbeAccent: [
       '[data-testid="SideNav_NewTweet_Button"]',
       'a[href="/compose/post"]',
@@ -133,6 +141,7 @@
     articleMarker:    { optional: true, note: 'only present on a native Article' },
     threadHint:       { optional: true },
     themeProbeAccent: { optional: true },
+    themeProbeFg:     { optional: true },
   };
 
   /** Resolve a selector key to the first selector string that matches. */

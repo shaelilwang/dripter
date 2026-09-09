@@ -52,9 +52,10 @@
         const tag = el.tagName.toLowerCase();
         const text = tidy(el.innerText);
         if (!text) continue;
+        // Verbatim. No injected bullet glyphs or quote marks: a list item
+        // that didn't start with "•" in the source must not start with one
+        // here. Line breaks alone carry the structure.
         if (/^h[1-6]$/.test(tag)) push('heading', text);
-        else if (tag === 'li') push('para', '• ' + text);
-        else if (tag === 'blockquote') push('para', '“' + text + '”');
         else push('para', text);
       }
       return blocks;
@@ -325,7 +326,10 @@
       return { ok: false, skipped: true, kind, reason: `too short to drip (${chars} chars)` };
     }
 
-    const snippets = chunker.chunk(result.blocks, { maxChars: settings.maxChars });
+    const snippets = chunker.chunk(result.blocks, {
+      maxCards: settings.maxCards,
+      maxChars: settings.maxChars,
+    });
     if (!snippets.length) {
       await store.updateItem(item.id, { state: 'failed', fetchedAt: Date.now() });
       return { ok: false, reason: 'body was empty after chunking' };

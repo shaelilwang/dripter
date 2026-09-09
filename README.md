@@ -19,14 +19,17 @@ browser against the session you're already logged into.
    thread, long post, or not worth dripping.
 3. **Chunk** — splits it by *structure*, never by length. Sections (heading to
    heading) and thread posts are the units, and adjacent ones are merged until
-   an article fits in at most 5 cards. Only the boundaries move: no text is cut,
-   trimmed or reworded, so what you read is verbatim. Cards clamp overflow
-   behind "Show more", the way X truncates its own long posts.
+   an article fits in at most 5 cards. Only the boundaries move — the text is
+   verbatim. Nothing is cut, reworded, bulleted or quoted that wasn't already,
+   and a line is only shown as a heading if the source marked it up as one.
+   Cards clamp overflow behind "Show more", as X does with its own long posts.
 4. **Drip** — as you scroll `/home`, inserts a snippet card after every Nth
    real post. Each card tracks where you are (`12 / 47`) and remembers.
 
-Progress is per-article and persistent. Scroll past a card and it counts as
-read; hit **Next ›** to burn through several in place without scrolling.
+Progress is per-article and persistent. A card counts as read once you've
+scrolled after it appeared and it's been on screen a moment — merely loading
+a page never advances anything, so refreshing costs you nothing. Hit
+**Next ›** to burn through several in place.
 
 ### One thing it can't do
 

@@ -418,8 +418,16 @@
         '<p>Second paragraph.</p><li>A bullet</li><blockquote>A quote</blockquote>';
       const sb = blocksFromArticle(semantic);
       eq2('headings come from the tag', sb[0], { type: 'heading', text: 'Why It Matters' });
-      check('bullets are marked', sb.some((b) => b.text.startsWith('•')));
-      check('quotes are marked', sb.some((b) => b.text.startsWith('\u201c')));
+      // Verbatim: a list item that had no bullet glyph in the source must not
+      // acquire one, and a quote must not gain quote marks.
+      check('list items are not given a bullet glyph',
+        !sb.some((b) => b.text.includes('\u2022')),
+        JSON.stringify(sb.map((b) => b.text)));
+      check('quotes are not given quote marks',
+        sb.some((b) => b.text === 'A quote'),
+        JSON.stringify(sb.map((b) => b.text)));
+      check('the list item text is still there',
+        sb.some((b) => b.text === 'A bullet'));
 
       // THE regression: X emits headings as real <h2> but body paragraphs as
       // plain <div>. Three-plus semantic elements were satisfied by the
@@ -588,6 +596,98 @@
 
       AD.dom.autoScroll = origScroll;
       await store.setSettings({ incrementalHarvest: true });
+    }
+
+    section('theme contrast');
+    {
+      const html = document.documentElement.style;
+      const probe = document.createElement('div');
+      probe.setAttribute('data-testid', 'primaryColumn');
+      document.body.appendChild(probe);
+
+      const post = document.createElement('div');
+      post.setAttribute('data-testid', 'tweetText');
+      probe.appendChild(post);
+
+      const read = () => ({
+        bg: html.getPropertyValue('--ad-bg'),
+        fg: html.getPropertyValue('--ad-fg'),
+      });
+
+      // Lights-out, with a foreground that (wrongly) reports near-black --
+      // exactly the case that rendered invisible cards.
+      probe.style.backgroundColor = 'rgb(0,0,0)';
+      post.style.color = 'rgb(15,20,25)';
+      let t = AD.card.refreshTheme(true);
+      check('a dark background is detected as dark', t.dark === true);
+      check('an unreadable sampled colour is overridden',
+        AD.card.contrastRatio(t.fg, t.bg) >= 4.5,
+        `contrast ${t.contrast.toFixed(2)} fg ${JSON.stringify(t.fg)}`);
+      check('and the published value is light on black',
+        /23[01]/.test(read().fg), read().fg);
+
+      // A correct dark-theme foreground is left alone.
+      post.style.color = 'rgb(231,233,234)';
+      t = AD.card.refreshTheme(true);
+      check('a readable sampled colour is kept',
+        t.fg.r === 231 && t.fg.g === 233, JSON.stringify(t.fg));
+
+      // Light theme.
+      probe.style.backgroundColor = 'rgb(255,255,255)';
+      post.style.color = 'rgb(231,233,234)'; // now unreadable
+      t = AD.card.refreshTheme(true);
+      check('a light background is detected as light', t.dark === false);
+      check('unreadable-on-white is also corrected',
+        AD.card.contrastRatio(t.fg, t.bg) >= 4.5,
+        `contrast ${t.contrast.toFixed(2)}`);
+
+      probe.remove();
+    }
+
+    section('refresh does not consume snippets');
+    {
+      // On a page load, a card lands inside the opening viewport. Visibility
+      // alone used to count it as read within a second, so every refresh
+      // silently advanced the article.
+      await fresh(9, 20, { everyNPosts: 3, markReadOnView: true, dwellMs: 40 });
+      // Dwell tracking is normally started by inject.start(), which the
+      // harness never calls; without it dwellMs keeps its 900ms default.
+      await AD.card.startDwellTracking();
+      inject._resetLayout(); AD.card.releaseAll();
+      await inject.sweep();
+      check('cards were placed', cards().length > 0, String(cards().length));
+
+      const first = cards()[0];
+      check('a freshly placed card is not eligible to be counted',
+        AD.card._eligible(first) === false);
+
+      // Simulate it being on screen, as it is on a page load, and wait past
+      // the dwell time. Nothing should be consumed.
+      const before = (await store.getItem('900')).cursor;
+      AD.card._seeCard(first, true);
+      await new Promise((r) => setTimeout(r, 200));
+      eq2('being visible on a freshly loaded page reads nothing',
+        (await store.getItem('900')).cursor, before);
+
+      // Scroll, and visible cards become eligible and start counting.
+      // (Exact counts aren't asserted: the real IntersectionObserver is live
+      // here too, so however many cards are genuinely on screen will count.)
+      AD.card._scroll();
+      check('a scroll makes it eligible', AD.card._eligible(first) === true);
+      await new Promise((r) => setTimeout(r, 250));
+      const afterScroll = (await store.getItem('900')).cursor;
+      check('after scrolling, reading progresses', afterScroll > before,
+        `${before} then ${afterScroll}`);
+
+      // A card placed after that scroll starts ineligible all over again, so
+      // a fresh injection can't be counted without further scrolling.
+      const later = cards()[1];
+      AD.card.track(later);
+      check('a newly placed card is ineligible again',
+        AD.card._eligible(later) === false);
+
+      AD.card._seeCard(first, false);
+      AD.card._seeCard(later, false);
     }
 
     // MUST be last: teardown is one-shot and global, so everything after it

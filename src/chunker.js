@@ -95,17 +95,6 @@
       .trim();
   }
 
-  /** A block is a heading if it's short, unpunctuated, and not a fragment. */
-  function looksLikeHeading(text) {
-    if (text.length > 80) return false;
-    if (/[.!?,;:]\s*$/.test(text)) return false;
-    if (text.split(/\s+/).length > 12) return false;
-    // Headings open with a capital or a number; a fragment mid-sentence
-    // usually doesn't. This is what keeps broken-up prose out.
-    if (!/^["'“(\[]?[A-Z0-9]/.test(text)) return false;
-    return true;
-  }
-
   /* ------------------------------------------------------------------ */
   /* sentence splitting                                                  */
   /* ------------------------------------------------------------------ */
@@ -333,8 +322,16 @@
     return out;
   }
 
-  /** Split blocks into { heading, paras } runs, one per heading. */
-  function toSections(blocks, opts, trustHeuristic) {
+  /**
+   * Split blocks into { heading, paras } runs, one per heading.
+   *
+   * ONLY an explicit `type: 'heading'` counts — that comes from a real
+   * <h1>-<h6> in the source. Guessing at headings from text shape invented
+   * structure the author never wrote: a thread post opening "1. Electronics
+   * fundamentals" was promoted to a bold header and lifted out of its own
+   * body. If the source didn't mark it up, it's prose.
+   */
+  function toSections(blocks, opts) {
     const sections = [];
     let cur = { heading: null, paras: [] };
     const flush = () => {
@@ -346,10 +343,7 @@
       const text = normalize(block && block.text);
       if (!text) continue;
 
-      const isHeading = block.type === 'heading' ||
-        (block.type !== 'para' && trustHeuristic && looksLikeHeading(text));
-
-      if (isHeading && text.length <= 120) {
+      if (block.type === 'heading' && text.length <= 120) {
         flush();
         cur.heading = text;
       } else if (block && block.atomic) {
@@ -462,43 +456,26 @@
   function chunk(blocks, options) {
     const opts = Object.assign({}, DEFAULTS, options || {});
 
-    // Accept a raw string for convenience: split it into blocks on blank lines.
+    // Accept a raw string for convenience: split it into blocks on blank
+    // lines. Everything is prose — a plain string carries no markup, so
+    // there is nothing to justify calling any line a heading.
     if (typeof blocks === 'string') {
       blocks = normalize(blocks)
         .split(/\n{1,}/)
         .map((t) => t.trim())
         .filter(Boolean)
-        .map((t) => ({ type: looksLikeHeading(t) ? 'heading' : 'para', text: t }));
+        .map((t) => ({ type: 'para', text: t }));
     }
 
     const snippets = [];
     let i = 0;
-
-    /*
-     * Guard against the heading heuristic running away.
-     *
-     * When an extractor hands us fragmented text — one short line per nested
-     * div, or a list of article titles instead of one article's prose — a
-     * large share of blocks look like headings, and the reader ends up with
-     * a card full of bold fragments and no actual content.
-     *
-     * A real article is mostly prose. If most untyped blocks read as headings
-     * the heuristic is wrong about this document, so stop trusting it here.
-     * Blocks explicitly typed by the extractor are always honoured.
-     */
-    const untyped = blocks.filter((b) => b && !b.type && normalize(b.text));
-    const headingish = untyped.filter((b) => looksLikeHeading(normalize(b.text)));
-    const trustHeuristic =
-      !(untyped.length >= 4 && headingish.length / untyped.length > 0.5);
 
     if (!opts.groupBySection) {
       // One card per paragraph. Kept for callers that want the old shape.
       blocks.forEach((block, bi) => {
         const text = normalize(block && block.text);
         if (!text) return;
-        const isHeading = block.type === 'heading' ||
-          (block.type !== 'para' && trustHeuristic && looksLikeHeading(text));
-        if (isHeading && text.length <= opts.maxChars) {
+        if (block.type === 'heading') {
           snippets.push({ text, kind: 'heading', block: bi, i: i++ });
           return;
         }
@@ -512,7 +489,7 @@
     // A heading rides along with the prose underneath it rather than taking a
     // card of its own — a card that is nothing but a heading tells you
     // nothing, and you have to advance past it to reach the actual content.
-    const sections = toSections(blocks, opts, trustHeuristic);
+    const sections = toSections(blocks, opts);
     const groups = groupSections(sections, opts.maxCards);
 
     for (const group of groups) {
@@ -547,7 +524,6 @@
     toSections,
     normalize,
     splitSentences,
-    looksLikeHeading,
     forceSplit,
     DEFAULTS,
   };

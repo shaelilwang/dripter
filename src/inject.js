@@ -68,6 +68,9 @@
       if (!settings.enabled) return;
       if (!isHome()) return;
 
+      // Keep the card colours in step with X's live theme.
+      card.refreshTheme();
+
       const timeline = sel.q('timelineRoot');
       if (!timeline) return;
 

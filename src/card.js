@@ -20,7 +20,20 @@
     return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
   }
 
-  const luminance = ({ r, g, b }) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  /** WCAG relative luminance, used for both dark-detection and contrast. */
+  function relLuminance({ r, g, b }) {
+    const f = (c) => {
+      c /= 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  }
+
+  function contrastRatio(a, b) {
+    const l1 = relLuminance(a);
+    const l2 = relLuminance(b);
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  }
 
   /**
    * Read X's current theme off the live page and publish it as CSS vars.
@@ -39,9 +52,21 @@
     }
     if (!bg || bg.a === 0) bg = { r: 255, g: 255, b: 255, a: 1 };
 
-    const fg = parseRGB(getComputedStyle(document.body).color) ||
-      { r: 15, g: 20, b: 25, a: 1 };
-    const dark = luminance(bg) < 0.5;
+    const dark = relLuminance(bg) < 0.4;
+
+    // Read the foreground off real post text where possible; fall back to
+    // <body>, whose colour on x.com often doesn't follow the active theme.
+    const fgProbe = sel.q('themeProbeFg');
+    let fg = parseRGB(fgProbe && getComputedStyle(fgProbe).color) ||
+      parseRGB(getComputedStyle(document.body).color);
+
+    // Whatever we sampled, it has to be readable on the background we
+    // sampled. Getting this wrong renders the card invisible, so never take
+    // the measurement on trust.
+    const readable = dark
+      ? { r: 231, g: 233, b: 234, a: 1 }
+      : { r: 15, g: 20, b: 25, a: 1 };
+    if (!fg || contrastRatio(fg, bg) < 4.5) fg = readable;
 
     const css = document.documentElement.style;
     css.setProperty('--ad-bg', `rgb(${bg.r},${bg.g},${bg.b})`);
@@ -50,7 +75,17 @@
     css.setProperty('--ad-border', dark ? 'rgb(47,51,54)' : 'rgb(207,217,222)');
     css.setProperty('--ad-accent', 'rgb(29,155,240)');
     css.setProperty('--ad-lightness', dark ? '62%' : '42%');
-    return { dark };
+    return { dark, bg, fg, contrast: contrastRatio(fg, bg) };
+  }
+
+  // X re-themes without navigating, and its own colours can land after we
+  // first sample. Re-check cheaply, but not on every mutation.
+  let lastTheme = 0;
+  function refreshTheme(force) {
+    const now = Date.now();
+    if (!force && now - lastTheme < 1000) return null;
+    lastTheme = now;
+    return applyTheme();
   }
 
   /* ---------------------------------------------------------------- */
@@ -342,34 +377,100 @@
   let observer = null;
   const timers = new WeakMap();
 
+  /*
+   * Scrolling is what separates "read" from "happened to be rendered".
+   *
+   * On a page load, cards get injected a few posts down — often inside the
+   * opening viewport. Visibility alone therefore counted them as read within
+   * a second of the page appearing, so every refresh silently advanced the
+   * article. Refreshing a few times burned through snippets nobody had seen.
+   *
+   * A card only becomes eligible once the reader has scrolled AFTER it was
+   * placed. The tick is compared per card, so a card that appears mid-scroll
+   * still has to wait for the next scroll of its own.
+   */
+  let scrollTick = 0;
+  let scrollBound = false;
+  let dwellMs = 900;
+  const visible = new Set();
+
+  /** Has the reader scrolled since this card was placed? */
+  const scrolledSincePlacement = (card) =>
+    Number(card.dataset.adTick || 0) !== scrollTick;
+
+  function clearTimer(card) {
+    const t = timers.get(card);
+    if (t) { clearTimeout(t); timers.delete(card); }
+  }
+
+  function maybeStartDwell(card) {
+    if (timers.has(card)) return;
+    if (!scrolledSincePlacement(card)) return;
+    timers.set(card, setTimeout(() => {
+      timers.delete(card);
+      // Re-check on fire: a pending timer must not outlive its conditions.
+      if (visible.has(card) && scrolledSincePlacement(card)) count(card);
+    }, dwellMs));
+  }
+
+  function bindScroll() {
+    if (scrollBound) return;
+    scrollBound = true;
+    const onScroll = () => {
+      scrollTick++;
+      // IntersectionObserver only fires when intersection CHANGES. A card
+      // that stays on screen while you scroll past neighbouring posts would
+      // never be re-evaluated, so nudge the currently-visible ones here or
+      // they could never become eligible at all.
+      for (const card of visible) maybeStartDwell(card);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    life.onTeardown(() => window.removeEventListener('scroll', onScroll));
+  }
+
   async function startDwellTracking() {
     const settings = await store.getSettings();
     if (!settings.markReadOnView || observer) return;
+    dwellMs = settings.dwellMs;
+    bindScroll();
 
     observer = new IntersectionObserver((entries) => {
       for (const e of entries) {
         const card = e.target;
         if (e.isIntersecting && e.intersectionRatio >= 0.6) {
-          if (timers.has(card)) continue;
-          timers.set(card, setTimeout(() => {
-            timers.delete(card);
-            count(card);
-          }, settings.dwellMs));
+          visible.add(card);
+          maybeStartDwell(card);
         } else {
-          const t = timers.get(card);
-          if (t) { clearTimeout(t); timers.delete(card); }
+          visible.delete(card);
+          clearTimer(card);
         }
       }
     }, { threshold: [0, 0.6, 1] });
-    life.onTeardown(() => { observer.disconnect(); observer = null; });
+
+    life.onTeardown(() => {
+      observer.disconnect();
+      observer = null;
+      visible.clear();
+    });
   }
 
   function track(card) {
+    bindScroll();
+    // Stamp the scroll position this card was born at, so it can't be counted
+    // as read merely for having been rendered into the opening viewport.
+    card.dataset.adTick = String(scrollTick);
     if (observer) observer.observe(card);
   }
 
   root.AD.card = {
     create, render, applyTheme, startDwellTracking, track,
-    takeNext, releaseAll, updateClamp, EMPTY,
+    takeNext, releaseAll, updateClamp, refreshTheme, contrastRatio, EMPTY,
+    // Test seams for tests/harness.html.
+    _scroll: () => { scrollTick++; for (const c of visible) maybeStartDwell(c); },
+    _eligible: (card) => scrolledSincePlacement(card),
+    _seeCard: (card, isVisible) => {
+      if (isVisible) { visible.add(card); maybeStartDwell(card); }
+      else { visible.delete(card); clearTimer(card); }
+    },
   };
 })(globalThis);
