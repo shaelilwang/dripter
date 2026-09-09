@@ -464,15 +464,22 @@ async function renderDiagnosis() {
   out.appendChild(pre);
 
   const copy = document.createElement('button');
-  copy.className = 'tiny';
+  copy.className = 'primary';
   copy.textContent = 'Copy report';
   copy.style.marginTop = '10px';
   copy.addEventListener('click', async () => {
     await navigator.clipboard.writeText(JSON.stringify(lastDiagnosis, null, 2));
-    copy.textContent = 'Copied';
-    setTimeout(() => { copy.textContent = 'Copy report'; }, 1500);
+    copy.textContent = 'Copied — paste it to Claude';
+    setTimeout(() => { copy.textContent = 'Copy report'; }, 2500);
   });
   out.appendChild(copy);
+
+  // This page opens automatically from the Diagnose button, and the report
+  // sits well below the fold. Take the reader to it rather than leaving them
+  // to hunt for it.
+  if (Date.now() - new Date(lastDiagnosis.at).getTime() < 15000) {
+    out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 /* ------------------------------------------------------------------ */
