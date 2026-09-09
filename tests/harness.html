@@ -674,12 +674,6 @@
       eq2('back goes to the previous part', badge(), 'drip 2/6');
       eq2('and stays on the same article', c.dataset.adItem, 'CTL');
 
-      const readsBefore = (await store.getStats()).snippetsRead;
-      await press('skip');
-      eq2('skip moves on', badge(), 'drip 3/6');
-      eq2('without counting as read',
-        (await store.getStats()).snippetsRead, readsBefore);
-
       // Later: confirms in place, does not flip the content.
       const shown = c.querySelector('.ad-text').textContent;
       await press('later');
@@ -687,10 +681,10 @@
       eq2('and stays on the same article', c.dataset.adItem, 'CTL');
       check('it says so', /again later/i.test(c.querySelector('.ad-note').textContent),
         JSON.stringify(c.querySelector('.ad-note').textContent));
-      eq2('the position is untouched', (await store.getItem('CTL')).cursor, 2);
+      eq2('the position is untouched', (await store.getItem('CTL')).cursor, 1);
 
       // And it resumes exactly there.
-      eq2('resuming shows the same part', (await store.peekItem('CTL')).index, 2);
+      eq2('resuming shows the same part', (await store.peekItem('CTL')).index, 1);
     }
 
     section('theme contrast');

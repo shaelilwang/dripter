@@ -206,8 +206,10 @@ every insertion point — which is why Next appeared to jump three or four
 snippets at once, since it had to step past indices the other visible cards
 had reserved. Don't reintroduce per-index reservation.
 
-**Back / Skip / Next stay inside the article** via `paintItem()`; only `Done`
-and an exhausted article move the card on with `repaint()`. `Later` calls
+**Back and Next stay inside the article** via `paintItem()`; only `Done` and
+an exhausted article move the card on with `repaint()`. There was briefly a
+Skip button that advanced without counting as read — it was removed as
+redundant with Done, so don't add one back. `Later` calls
 `store.snooze()` and deliberately does NOT change what the card shows — being
 instantly replaced reads like the button did something else. The snooze holds
 an article back only while something else is available.

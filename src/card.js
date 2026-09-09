@@ -192,7 +192,6 @@
     const acts = el('div', 'ad-actions');
     for (const [act, label, title] of [
       ['back', '‹ Back', 'Go back to the previous part'],
-      ['skip', 'Skip', 'Move past this part without marking it read'],
       ['later', 'Later', 'Hold this article back; it resumes right here'],
       ['done', 'Done', 'Finish this article and stop showing it'],
       ['open', 'Open', 'Open the original on X'],
@@ -393,15 +392,6 @@
     if (act === 'back') {
       if (!id) return;
       await store.stepBack(id);
-      await paintItem(card, id);
-      return;
-    }
-
-    if (act === 'skip') {
-      if (!id) return;
-      // Mark the card counted so the dwell timer can't also consume it.
-      card.dataset.adCounted = '1';
-      await store.skipForward(id);
       await paintItem(card, id);
       return;
     }

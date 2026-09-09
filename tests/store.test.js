@@ -217,7 +217,7 @@ async function main() {
     await store.peekNext(new Set(['A1', 'A2'])), null);
   eq('exclusion does not disturb the cursor', (await store.getItem('A1')).cursor, 0);
 
-  console.log('\nback and skip');
+  console.log('\nback');
   reset();
   await seed('B1', 4);
   await store.consume('B1', 0);
@@ -230,19 +230,6 @@ async function main() {
   await store.stepBack('B1');
   await store.stepBack('B1');
   eq('back stops at the beginning', (await store.getItem('B1')).cursor, 0);
-
-  const readsBefore = (await store.getStats()).snippetsRead;
-  await store.skipForward('B1');
-  eq('skip advances', (await store.getItem('B1')).cursor, 1);
-  eq('but is not counted as reading',
-    (await store.getStats()).snippetsRead, readsBefore);
-
-  reset();
-  await seed('B2', 2);
-  await store.skipForward('B2');
-  await store.skipForward('B2');
-  eq('skipping to the end finishes the article',
-    (await store.getItem('B2')).state, 'done');
 
   console.log('\nlater resumes where you left it');
   reset();

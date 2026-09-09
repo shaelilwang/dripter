@@ -279,20 +279,6 @@
     return it;
   }
 
-  /** Move past a snippet without counting it as read. */
-  async function skipForward(id) {
-    const items = await getItems();
-    const it = items[id];
-    if (!it || !it.snippets) return null;
-    if (it.cursor >= it.snippets.length) return it;
-
-    it.cursor = it.cursor + 1;
-    it.state = it.cursor >= it.snippets.length ? 'done' : 'reading';
-    items[id] = it;
-    await set({ items });
-    return it;
-  }
-
   /**
    * Hold an article back for a while without consuming anything, so it
    * resumes at exactly the snippet you left it on.
@@ -454,7 +440,7 @@
     getStats, bumpStats,
     getItems, getItem, upsertItem, upsertMany, updateItem, removeItem,
     setSnippets, peekNext, peekItem, consume, resetItem, markDone,
-    stepBack, skipForward, snooze,
+    stepBack, snooze,
     markManyDone, retryFailed, removeMany, rechunkAll,
     counts, exportAll, importAll,
   };

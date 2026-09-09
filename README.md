@@ -110,7 +110,6 @@ advance by pressing **Next ›**.
 | Button | What it does |
 |---|---|
 | `‹ Back` | Previous part of this article. Disabled on the first one. |
-| `Skip` | Move past this part without counting it as read. |
 | `Later` | Hold this article back for a while. Confirms in place rather than flipping, and resumes on exactly the part you left. |
 | `Done` | Finish this article; it stops appearing. |
 | `Open` | Open the original on X. |
