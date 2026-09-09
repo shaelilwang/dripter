@@ -406,9 +406,87 @@
     return { ok: true, kind, snippets: snippets.length, chars, headings };
   }
 
+  /**
+   * Run the extraction pipeline read-only and report every stage.
+   *
+   * When a card comes out wrong, the cause could be the body selector, the
+   * block walk, the title lookup, or a stale stored item — and from the
+   * outside all four look identical. This says which, on the page the reader
+   * is actually looking at, using the real code paths rather than a guess
+   * about them.
+   */
+  async function diagnose() {
+    const report = {
+      url: location.href,
+      path: location.pathname,
+      at: new Date().toISOString(),
+    };
+
+    let bodyEl = sel.q('articleBody');
+    report.namedBodySelector = bodyEl ? sel.pick('articleBody') : null;
+    if (!bodyEl) {
+      bodyEl = findProseFallback(1200);
+      report.usedStructuralFallback = !!bodyEl;
+    }
+    report.bodyFound = !!bodyEl;
+
+    if (bodyEl) {
+      report.body = {
+        tag: bodyEl.tagName.toLowerCase(),
+        testid: bodyEl.getAttribute('data-testid') || null,
+        chars: (bodyEl.innerText || '').trim().length,
+      };
+    }
+
+    // Every heading in the main column, and whether it sits inside the body
+    // we picked. A title living outside it is the whole problem.
+    const scope = sel.q('primaryColumn') || document.body;
+    report.headings = Array.from(scope.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+      .slice(0, 15)
+      .map((h) => ({
+        tag: h.tagName.toLowerCase(),
+        text: tidy(h.innerText).slice(0, 120),
+        insideBody: !!(bodyEl && bodyEl.contains(h)),
+      }));
+
+    if (bodyEl) {
+      const blocks = blocksFromArticle(bodyEl);
+      report.blockCount = blocks.length;
+      report.firstBlocks = blocks.slice(0, 6).map((b) => ({
+        type: b.type || 'para',
+        text: b.text.slice(0, 90),
+      }));
+      report.quality = assessBlocks(blocks, bodyEl);
+      report.titleSelectorInBody = sel.pick('articleTitle', bodyEl);
+      report.titleChosen = articleTitleFor(bodyEl, blocks);
+    }
+
+    // And what we already hold for this page, which is what the card shows.
+    const m = location.pathname.match(/\/status\/(\d+)/);
+    if (m) {
+      const item = await root.AD.store.getItem(m[1]);
+      report.storedItem = item ? {
+        id: item.id,
+        title: item.title,
+        kind: item.kind,
+        state: item.state,
+        snippetCount: (item.snippets || []).length,
+        cursor: item.cursor,
+        storedBlocks: (item.blocks || []).length,
+        firstSnippetHeading: (item.snippets || [])[0]
+          ? item.snippets[0].heading : null,
+        firstSnippet: (item.snippets || [])[0]
+          ? item.snippets[0].text.slice(0, 90) : null,
+        debug: item.debug || null,
+      } : 'nothing stored for this status id';
+    }
+
+    return report;
+  }
+
   root.AD.extract = {
     extractInto, extractArticle, extractThread,
     blocksFromArticle, dropTitleEcho, findProseFallback, assessBlocks,
-    articleTitleFor, threadTitleFrom,
+    articleTitleFor, threadTitleFrom, diagnose,
   };
 })(globalThis);

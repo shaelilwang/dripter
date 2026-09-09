@@ -78,6 +78,11 @@ async function refresh() {
   const onBookmarks = tab && HARVEST_RE.test(tab.url || '');
   $('harvest').textContent = onBookmarks ? 'Harvest this list' : 'Open Bookmarks to harvest';
   $('doctor').disabled = !(tab && /(^https:\/\/(x|twitter)\.com)/.test(tab.url || ''));
+  // Diagnosing only means anything on a page that holds an article.
+  $('diagnose').disabled = !(tab && /(x|twitter)\.com\/.+\/status\/|\/i\/article\//.test(tab.url || ''));
+  $('diagnose').title = $('diagnose').disabled
+    ? 'Open the article itself (an x.com/…/status/… page) first'
+    : 'Run the extractor here and report what it sees';
   $('fetch').disabled = counts.fetchable === 0;
   $('fetch').textContent = counts.fetchable
     ? `Fetch article bodies (${counts.fetchable})`
@@ -141,6 +146,21 @@ $('doctor').addEventListener('click', async () => {
     return;
   }
   await chrome.storage.local.set({ lastDoctor: res.report });
+  chrome.runtime.openOptionsPage();
+  window.close();
+});
+
+$('diagnose').addEventListener('click', async () => {
+  const tab = await activeTab();
+  if (!tab) return;
+  say('Running the extractor on this page…');
+  const res = await askTab(tab.id, { type: 'AD_DIAGNOSE' });
+  if (!res || !res.ok) {
+    say('Content script not running in this tab, so nothing was read. ' +
+        'Reload the page and try again.', 'err');
+    return;
+  }
+  await chrome.storage.local.set({ lastDiagnosis: res.report });
   chrome.runtime.openOptionsPage();
   window.close();
 });

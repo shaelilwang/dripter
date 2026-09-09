@@ -48,6 +48,10 @@
         }));
         return true;
 
+      case 'AD_DIAGNOSE':
+        reply(extract.diagnose().then((report) => ({ report })));
+        return true;
+
       case 'AD_EXTRACT':
         reply(extract.extractInto(msg.item));
         return true;

@@ -401,12 +401,89 @@ function renderCensus(c, out) {
 }
 
 /* ------------------------------------------------------------------ */
+/* article diagnosis                                                   */
+/* ------------------------------------------------------------------ */
+
+async function renderDiagnosis() {
+  const { lastDiagnosis } = await chrome.storage.local.get('lastDiagnosis');
+  const out = $('diag-out');
+  if (!lastDiagnosis) return;
+
+  out.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'small muted';
+  head.style.marginBottom = '8px';
+  head.textContent = `${lastDiagnosis.path} · ${new Date(lastDiagnosis.at).toLocaleString()}`;
+  out.appendChild(head);
+
+  // A short verdict up front, so the common failures don't need reading JSON.
+  const verdicts = [];
+  if (!lastDiagnosis.bodyFound) {
+    verdicts.push('No article body found on this page at all — the articleBody ' +
+      'selectors missed and the structural fallback found nothing long enough.');
+  } else {
+    if (lastDiagnosis.usedStructuralFallback) {
+      verdicts.push('Body found only by the structural fallback, so the ' +
+        'articleBody selectors are wrong for this page.');
+    }
+    if (!lastDiagnosis.titleChosen) {
+      const outside = (lastDiagnosis.headings || []).filter((h) => !h.insideBody);
+      verdicts.push('No title found. ' + (outside.length
+        ? `There are ${outside.length} heading(s) on the page OUTSIDE the body ` +
+          'element — the title is probably one of them.'
+        : 'There are no headings inside the body either.'));
+    }
+    if (lastDiagnosis.quality && lastDiagnosis.quality.coverage != null &&
+        lastDiagnosis.quality.coverage < 0.6) {
+      verdicts.push(`Only ${Math.round(lastDiagnosis.quality.coverage * 100)}% of ` +
+        'the body text was captured.');
+    }
+  }
+  if (lastDiagnosis.storedItem && typeof lastDiagnosis.storedItem === 'object' &&
+      lastDiagnosis.titleChosen &&
+      lastDiagnosis.storedItem.title !== lastDiagnosis.titleChosen) {
+    verdicts.push('The stored copy still has the OLD title ' +
+      `("${lastDiagnosis.storedItem.title}") — re-chunk or re-fetch to pick up ` +
+      `"${lastDiagnosis.titleChosen}".`);
+  }
+
+  const v = document.createElement('div');
+  v.className = 'notice ' + (verdicts.length ? 'err' : 'ok');
+  v.style.marginBottom = '10px';
+  v.style.whiteSpace = 'pre-wrap';
+  v.textContent = verdicts.length ? verdicts.join('\n\n')
+    : 'Extraction looks healthy on this page.';
+  out.appendChild(v);
+
+  const pre = document.createElement('pre');
+  pre.className = 'mono';
+  pre.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;' +
+    'overflow:auto;margin:0;padding:10px;border:1px solid var(--border);border-radius:8px';
+  pre.textContent = JSON.stringify(lastDiagnosis, null, 2);
+  out.appendChild(pre);
+
+  const copy = document.createElement('button');
+  copy.className = 'tiny';
+  copy.textContent = 'Copy report';
+  copy.style.marginTop = '10px';
+  copy.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(JSON.stringify(lastDiagnosis, null, 2));
+    copy.textContent = 'Copied';
+    setTimeout(() => { copy.textContent = 'Copy report'; }, 1500);
+  });
+  out.appendChild(copy);
+}
+
+/* ------------------------------------------------------------------ */
 
 wireSettings();
 loadSettings();
 renderLibrary();
 renderDoctor();
+renderDiagnosis();
 chrome.storage.onChanged.addListener((c) => {
   if (c.items) renderLibrary();
   if (c.lastDoctor) renderDoctor();
+  if (c.lastDiagnosis) renderDiagnosis();
 });
