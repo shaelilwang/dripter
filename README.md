@@ -24,8 +24,8 @@ browser against the session you're already logged into.
    marked it up as one. Cards clamp overflow behind "Show more", as X does with
    its own long posts.
 4. **Drip** — as you scroll `/home`, inserts a card after every Nth real post.
-   The article's name leads the card at heading size so you can recognise it
-   while scrolling; author and position (`drip 3/12`) sit underneath. Body copy
+   The article's own name leads the card at heading size so you can recognise
+   it while scrolling; the author and position (`drip 3/12`) sit underneath. Body copy
    is set with reading leading and real paragraph spacing, keeping the author's
    own blank lines where they put them.
 

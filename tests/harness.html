@@ -597,6 +597,83 @@
           'First paragraph.\n\nSecond paragraph.\n\n- one\n- two\n- three');
     }
 
+    section('article title');
+    {
+      const { articleTitleFor, blocksFromArticle, dropTitleEcho } = AD.extract;
+
+      // The reported bug: the card was headed with the author's name while
+      // the real title sat in the body as its opening heading.
+      const art = document.createElement('div');
+      art.innerHTML =
+        '<h1>Judge the Work Instead of the Answer</h1>' +
+        '<div>Most evaluation regimes reward the answer and ignore the path ' +
+        'taken to reach it, which is a reasonable shortcut only sometimes.</div>' +
+        '<h2>Break the Judgment Apart</h2>' +
+        '<div>A correct answer arrived at by luck looks identical to one ' +
+        'arrived at by understanding, right up until it does not.</div>';
+      document.body.appendChild(art);
+
+      let blocks = blocksFromArticle(art);
+      const title = articleTitleFor(art, blocks);
+      eq2('the title comes from the article, not the author',
+        title, 'Judge the Work Instead of the Answer');
+
+      blocks = dropTitleEcho(blocks, title);
+      check('and is lifted out of the body, not shown twice',
+        !blocks.some((b) => b.text === title),
+        JSON.stringify(blocks.map((b) => b.text.slice(0, 30))));
+      check('inner section headings are left where they are',
+        blocks.some((b) => b.type === 'heading' && b.text === 'Break the Judgment Apart'));
+      art.remove();
+
+      // No heading anywhere: nothing to invent, so nothing is claimed.
+      const bare = document.createElement('div');
+      bare.innerHTML = '<div>Just some prose with no heading at all in it.</div>';
+      document.body.appendChild(bare);
+      eq2('no heading means no title',
+        articleTitleFor(bare, blocksFromArticle(bare)), null);
+      bare.remove();
+    }
+
+    section('re-chunk repairs old titles');
+    {
+      __resetStorage();
+      // An item extracted before the fix: headed with the author's name, with
+      // the real title still sitting in its stored blocks.
+      await store.upsertItem({ id: 'OLD', url: 'u', kind: 'article',
+        title: 'Josh Rosen', author: { name: 'Josh Rosen', handle: 'JoshARosen' } });
+      await store.updateItem('OLD', {
+        blocks: [
+          { type: 'heading', text: 'Judge the Work Instead of the Answer' },
+          { type: 'para', text: 'Body prose that carries the actual article. '.repeat(6) },
+        ],
+      });
+      await store.setSnippets('OLD', [{ text: 'stale', kind: 'para' }]);
+
+      await store.rechunkAll();
+      const fixed = await store.getItem('OLD');
+      eq2('the author name is replaced by the real title',
+        fixed.title, 'Judge the Work Instead of the Answer');
+      check('and the heading no longer opens the body',
+        !fixed.snippets[0].text.startsWith('Judge the Work'),
+        JSON.stringify(fixed.snippets[0].text.slice(0, 40)));
+
+      // An item that already has a proper title must not have its first
+      // section heading promoted over the top of it.
+      await store.upsertItem({ id: 'GOOD', url: 'u', kind: 'article',
+        title: 'A Perfectly Good Title', author: { name: 'Someone', handle: 's' } });
+      await store.updateItem('GOOD', {
+        blocks: [
+          { type: 'heading', text: 'Section One' },
+          { type: 'para', text: 'Body prose here. '.repeat(10) },
+        ],
+      });
+      await store.setSnippets('GOOD', [{ text: 'stale', kind: 'para' }]);
+      await store.rechunkAll();
+      eq2('a real title is left alone',
+        (await store.getItem('GOOD')).title, 'A Perfectly Good Title');
+    }
+
     section('incremental re-harvest');
     {
       // A second harvest over unchanged bookmarks must stop scrolling instead

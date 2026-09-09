@@ -232,6 +232,19 @@ text was the complaint. Single newlines stay inside a paragraph (pre-wrap) so
 list runs stay tight. `-webkit-line-clamp` still works over these block
 children; the clamp test covers it.
 
+**The title comes from the article body, not from a page-wide query.**
+`articleTitleFor()` reads `articleTitle` scoped to `bodyEl`, then falls back to
+the first heading block. It deliberately does NOT search the document: that
+list ends in a bare `h1`, and page-wide it returns X's own chrome heading — a
+confidently wrong title is worse than none, since the harvested name stands in.
+Before this, the selectors always missed and every card was headed with the
+author's name while the real title sat unused in the body.
+
+`rechunkAll()` repairs items extracted before that, hoisting the opening
+heading out of the stored blocks — gated on the current title being one of the
+old author-name fallbacks, so a good title never gets overwritten by a section
+heading.
+
 ## Scope boundaries the user set
 
 - **X-native content only** — native Articles and threads. No fetching or

@@ -154,16 +154,44 @@
     await dom.autoScroll({ maxSteps: 25, settleMs: 500 });
     await dom.waitForStable(() => dom.richText(bodyEl).length, { quietMs: 800 });
 
-    const titleEl = sel.q('articleTitle');
-    const title = titleEl ? dom.richText(titleEl).trim().split('\n')[0] : null;
     let blocks = blocksFromArticle(bodyEl);
-
+    const title = articleTitleFor(bodyEl, blocks);
     blocks = dropTitleEcho(blocks, title);
 
     return {
       title, blocks, source: 'article', via,
       quality: assessBlocks(blocks, bodyEl),
     };
+  }
+
+  /**
+   * Work out what the article is actually called.
+   *
+   * The `articleTitle` selectors are guesses and mostly miss, and when they
+   * do the card fell back to the author's name — so every card was headed
+   * "Josh Rosen" while the real title sat unused in the body as its first
+   * heading. Read it from the body instead, which is where it demonstrably
+   * is.
+   *
+   * Deliberately scoped to the article body and never searched page-wide.
+   * The `articleTitle` list ends in a bare `h1`, and a document-wide query
+   * for that happily returns whatever X put in its own page chrome — which
+   * would title the article with something from the surrounding UI. Better
+   * no title than a confidently wrong one; the harvested name stands in.
+   */
+  function articleTitleFor(bodyEl, blocks) {
+    const inBody = sel.q('articleTitle', bodyEl);
+    if (inBody) {
+      const t = tidy(inBody.innerText).split('\n')[0];
+      if (t) return t;
+    }
+
+    // The heading the article opens with is its title.
+    if (blocks.length && blocks[0].type === 'heading' && blocks[0].text) {
+      return blocks[0].text;
+    }
+
+    return null;
   }
 
   /**
@@ -248,7 +276,28 @@
       blocks.push({ type: 'para', atomic: true, text: cleaned });
     }
 
-    return { title: null, blocks, source: 'thread', postCount: parts.length };
+    return {
+      title: threadTitleFrom(parts[0]),
+      blocks,
+      source: 'thread',
+      postCount: parts.length,
+    };
+  }
+
+  /**
+   * A thread has no title markup, but its opening line is nearly always the
+   * hook that tells you what it's about — a far better card heading than the
+   * author's name, which is what the fallback used to produce.
+   *
+   * Only the first line, and only if it reads like an opener: a list item or
+   * a full paragraph is the thread's content, not its name.
+   */
+  function threadTitleFrom(firstPost) {
+    const line = String(firstPost || '').split('\n')[0].trim();
+    if (!line) return null;
+    if (line.length > 120) return null;
+    if (/^[•\-*–—]\s|^\d+[.)]\s/.test(line)) return null;
+    return line;
   }
 
   /* ---------------------------------------------------------------- */
@@ -360,5 +409,6 @@
   root.AD.extract = {
     extractInto, extractArticle, extractThread,
     blocksFromArticle, dropTitleEcho, findProseFallback, assessBlocks,
+    articleTitleFor, threadTitleFrom,
   };
 })(globalThis);

@@ -317,6 +317,26 @@
     for (const it of Object.values(items)) {
       if (!it.blocks || !it.blocks.length) { skipped++; continue; }
 
+      /*
+       * Repair titles left over from before the extractor knew how to find
+       * one. Those items are headed with the author's name, while the real
+       * title sits in the blocks as the opening heading — hoist it out.
+       *
+       * Gated on the title actually being one of the old fallbacks, so an
+       * article that already has a proper title doesn't get its first
+       * section heading promoted over the top of it.
+       */
+      const authorName = (it.author && it.author.name) || '';
+      const handle = (it.author && it.author.handle) || '';
+      const fallbackTitles = [
+        '', authorName, authorName + ' — thread', '@' + handle, '@' + handle + ' — thread',
+      ];
+      if (fallbackTitles.includes(it.title || '') &&
+          it.blocks[0] && it.blocks[0].type === 'heading' && it.blocks[0].text) {
+        it.title = it.blocks[0].text;
+        it.blocks = it.blocks.slice(1);
+      }
+
       const snippets = chunker.chunk(it.blocks, {
         maxCards: settings.maxCards,
         maxChars: settings.maxChars,
@@ -328,6 +348,8 @@
       const cursor = Math.min(snippets.length, Math.round(progress * snippets.length));
 
       items[it.id] = Object.assign({}, it, {
+        title: it.title,
+        blocks: it.blocks,
         snippets: snippets.map((s) => ({
           text: s.text, kind: s.kind || 'para', heading: s.heading || null,
         })),
