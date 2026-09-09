@@ -191,9 +191,21 @@ $('bulk-retry').addEventListener('click', async () => {
 
 $('rechunk').addEventListener('click', async () => {
   try {
-    const { done, skipped } = await store.rechunkAll();
-    say(`Re-chunked ${done} article${done === 1 ? '' : 's'} with the current settings.` +
-        (skipped ? ` ${skipped} had no stored text — re-fetch those.` : ''), 'ok');
+    const { done, skipped, needsRefetch } = await store.rechunkAll();
+    const bits = [`Re-chunked ${done} article${done === 1 ? '' : 's'}.`];
+    if (skipped) bits.push(`${skipped} had no stored text at all.`);
+    if (needsRefetch) {
+      // Saying "done" while nothing visibly changed is worse than saying
+      // nothing: re-chunking cannot add structure that was never captured.
+      bits.push(`${needsRefetch} still can't be fixed this way — their stored ` +
+        'text has no headings or title in it, so there is nothing to rearrange. ' +
+        'Click "Re-fetch" above, then "Fetch article bodies" in the popup.');
+    }
+    say(bits.join(' '), needsRefetch ? 'err' : 'ok');
+    if (needsRefetch) {
+      $('refetch').classList.add('primary');
+      $('refetch').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     renderLibrary();
   } catch (e) {
     say(String(e.message || e), 'err');

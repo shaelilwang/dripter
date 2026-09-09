@@ -705,6 +705,11 @@
       eq2('re-chunk cannot recover the structure',
         (await store.getItem('STALE')).blocks.length, 1);
 
+      // And it must say so, rather than reporting success and changing
+      // nothing the reader can see.
+      const r = await store.rechunkAll();
+      eq2('re-chunk reports what it cannot fix', r.needsRefetch, 1);
+
       eq2('re-fetch requeues it', await store.requeueMany('all'), 1);
       const it = await store.getItem('STALE');
       eq2('it is pending again', it.state, 'pending');

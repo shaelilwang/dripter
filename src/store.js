@@ -313,6 +313,7 @@
     const items = await getItems();
     let done = 0;
     let skipped = 0;
+    let needsRefetch = 0;
 
     for (const it of Object.values(items)) {
       if (!it.blocks || !it.blocks.length) { skipped++; continue; }
@@ -331,10 +332,21 @@
       const fallbackTitles = [
         '', authorName, authorName + ' — thread', '@' + handle, '@' + handle + ' — thread',
       ];
-      if (fallbackTitles.includes(it.title || '') &&
+      const titleIsFallback = fallbackTitles.includes(it.title || '');
+
+      if (titleIsFallback &&
           it.blocks[0] && it.blocks[0].type === 'heading' && it.blocks[0].text) {
         it.title = it.blocks[0].text;
         it.blocks = it.blocks.slice(1);
+      } else if (titleIsFallback || it.blocks.length <= 1) {
+        /*
+         * Beyond help here. Re-chunking only rearranges stored blocks, and
+         * these were captured by an older extractor as one undifferentiated
+         * lump with no heading structure and no title. Count them so the
+         * caller can say "re-fetch these" instead of reporting success and
+         * changing nothing the reader can see.
+         */
+        needsRefetch++;
       }
 
       const snippets = chunker.chunk(it.blocks, {
@@ -362,7 +374,7 @@
     }
 
     await set({ items });
-    return { done, skipped };
+    return { done, skipped, needsRefetch };
   }
 
   /* ---- bulk operations: one read, one write, whatever the size ---- */
