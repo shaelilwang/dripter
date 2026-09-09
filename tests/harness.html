@@ -689,6 +689,57 @@
       col.remove();
     }
 
+    section('confirmed title selector');
+    {
+      // data-testid="twitter-article-title" is confirmed live. It sits OUTSIDE
+      // the rich-text body, so it has to be found page-wide, and it must win
+      // over the font-size heuristic.
+      const col = document.createElement('div');
+      col.setAttribute('data-testid', 'primaryColumn');
+      col.innerHTML =
+        '<h2>Article</h2>' +
+        '<div data-testid="twitter-article-title" style="font-size:34px">' +
+          'LLM-as-Judge Architectures</div>' +
+        '<div style="font-size:40px">Some huge unrelated banner text here</div>' +
+        '<div data-testid="twitterArticleRichTextView">' +
+          '<div>Body prose that carries the article along nicely.</div>' +
+        '</div>';
+      document.body.appendChild(col);
+
+      const bodyEl = col.querySelector('[data-testid="twitterArticleRichTextView"]');
+      const blocks = AD.extract.blocksFromArticle(bodyEl);
+      eq2('the confirmed testid wins over bigger text nearby',
+        AD.extract.articleTitleFor(bodyEl, blocks), 'LLM-as-Judge Architectures');
+      eq2('and the selector resolves', AD.sel.pick('articleTitleExact'),
+        '[data-testid="twitter-article-title"]');
+      col.remove();
+    }
+    {
+      // The camelCase name X uses elsewhere is still accepted.
+      const col = document.createElement('div');
+      col.setAttribute('data-testid', 'primaryColumn');
+      col.innerHTML = '<div data-testid="twitterArticleTitle">Older Naming</div>' +
+        '<div data-testid="twitterArticleRichTextView"><div>Prose.</div></div>';
+      document.body.appendChild(col);
+      const b = col.querySelector('[data-testid="twitterArticleRichTextView"]');
+      eq2('camelCase naming still matches',
+        AD.extract.articleTitleFor(b, AD.extract.blocksFromArticle(b)), 'Older Naming');
+      col.remove();
+    }
+    {
+      // The generic h1 must never be reached page-wide: on a real page that
+      // is X's "Conversation" chrome heading.
+      const col = document.createElement('div');
+      col.setAttribute('data-testid', 'primaryColumn');
+      col.innerHTML = '<div data-testid="twitterArticleRichTextView"><div>Prose only.</div></div>' +
+        '<h1>Conversation</h1>';
+      document.body.appendChild(col);
+      const b = col.querySelector('[data-testid="twitterArticleRichTextView"]');
+      check('X chrome is never picked up as a title',
+        AD.extract.articleTitleFor(b, AD.extract.blocksFromArticle(b)) !== 'Conversation');
+      col.remove();
+    }
+
     section('re-fetch requeues stale captures');
     {
       __resetStorage();

@@ -180,6 +180,14 @@
    * no title than a confidently wrong one; the harvested name stands in.
    */
   function articleTitleFor(bodyEl, blocks) {
+    // Confirmed testid first. It lives outside the body, so it has to be
+    // found page-wide — safe because the name can only be an article title.
+    const exact = sel.q('articleTitleExact');
+    if (exact) {
+      const t = tidy(exact.innerText).split('\n')[0];
+      if (t) return t;
+    }
+
     const inBody = sel.q('articleTitle', bodyEl);
     if (inBody) {
       const t = tidy(inBody.innerText).split('\n')[0];
@@ -509,6 +517,7 @@
         text: b.text.slice(0, 90),
       }));
       report.quality = assessBlocks(blocks, bodyEl);
+      report.titleSelectorExact = sel.pick('articleTitleExact');
       report.titleSelectorInBody = sel.pick('articleTitle', bodyEl);
       report.titleChosen = articleTitleFor(bodyEl, blocks);
       report.titleAboveBody = titleAboveBody(bodyEl);

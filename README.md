@@ -162,6 +162,14 @@ costs nothing and keeps it working on older X builds.
 Some `✕` marks are normal: `articleBody` only resolves on an Article page,
 `cell` only on a timeline.
 
+### Fixing one article without touching the rest
+
+On the article's own page, the popup offers **Re-read this article now**. It
+runs the extractor there and then and replaces what's stored for that one
+item — no library-wide requeue, no background job, and everything else keeps
+its reading position. **Diagnose this article page** next to it reports what
+the extractor sees, stage by stage, if the result still looks wrong.
+
 ### Other things to try
 
 - **No cards in the feed** — check the popup switch is on and "snippets left"

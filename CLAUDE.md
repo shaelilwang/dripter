@@ -44,6 +44,17 @@ though anything goes at call time.
 
 ## Things that will bite you
 
+**X mixes testid casing.** The Article body is `twitterArticleRichTextView`
+(camelCase); the Article title is `twitter-article-title` (hyphenated). Both
+confirmed live. Guessing one convention from the other is what hid the title
+selector for several rounds — when adding a selector, try both casings, and
+add a `[data-testid*="..." i]` wildcard alongside.
+
+**The title sits OUTSIDE the rich-text body**, so `articleTitleExact` is
+queried page-wide. That is only safe because those names cannot match anything
+else; the looser `articleTitle` list ends in a bare `h1` and must stay scoped
+to the body, or it returns X's "Conversation" chrome heading.
+
 **An Article page's title is not a heading.** Confirmed by diagnosing a live
 Article: the only h1/h2 outside the rich-text body are X's own chrome
 ("Article", "Conversation"), and every h2 inside it is one of the article's

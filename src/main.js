@@ -52,6 +52,44 @@
         reply(extract.diagnose().then((report) => ({ report })));
         return true;
 
+      /*
+       * Re-read the article in this very tab and store the result.
+       *
+       * The background fetch job exists for doing the whole library, but
+       * when one article is wrong it is a lot of machinery to fix the page
+       * you are already looking at — and it resets everything else's
+       * reading position on the way.
+       */
+      case 'AD_EXTRACT_HERE':
+        reply((async () => {
+          const m = path().match(/^\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/);
+          if (!m) throw new Error('Open the article itself first (an x.com/…/status/… page).');
+          const [, handle, id] = m;
+
+          let item = await store.getItem(id);
+          if (!item) {
+            // Works even on an article that was never harvested.
+            item = await store.upsertItem({
+              id,
+              url: location.origin + location.pathname,
+              statusUrl: location.origin + location.pathname,
+              kind: 'article',
+              likely: true,
+              author: { name: '', handle },
+            });
+          }
+
+          const res = await extract.extractInto(item);
+          const after = await store.getItem(id);
+          return {
+            extracted: res,
+            title: after && after.title,
+            snippets: after ? (after.snippets || []).length : 0,
+            state: after && after.state,
+          };
+        })());
+        return true;
+
       case 'AD_EXTRACT':
         reply(extract.extractInto(msg.item));
         return true;

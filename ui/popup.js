@@ -83,6 +83,10 @@ async function refresh() {
   $('diagnose').title = $('diagnose').disabled
     ? 'Open the article itself (an x.com/…/status/… page) first'
     : 'Run the extractor here and report what it sees';
+  $('reread').disabled = $('diagnose').disabled;
+  $('reread').title = $('reread').disabled
+    ? 'Open the article itself (an x.com/…/status/… page) first'
+    : 'Read this page again and replace what is stored for it';
   $('fetch').disabled = counts.fetchable === 0;
   $('fetch').textContent = counts.fetchable
     ? `Fetch article bodies (${counts.fetchable})`
@@ -148,6 +152,28 @@ $('doctor').addEventListener('click', async () => {
   await chrome.storage.local.set({ lastDoctor: res.report });
   chrome.runtime.openOptionsPage();
   window.close();
+});
+
+$('reread').addEventListener('click', async () => {
+  const tab = await activeTab();
+  if (!tab) return;
+  $('reread').disabled = true;
+  say('Reading this page… it scrolls to the bottom first, so give it a few seconds.');
+
+  const res = await askTab(tab.id, { type: 'AD_EXTRACT_HERE' });
+  $('reread').disabled = false;
+
+  if (!res) {
+    say('No response from the page. Reload it and try again.', 'err');
+  } else if (!res.ok) {
+    say(res.error || 'Could not read this page.', 'err');
+  } else if (res.extracted && res.extracted.ok) {
+    say(`Stored “${res.title}” — ${res.snippets} card${res.snippets === 1 ? '' : 's'}.`, 'ok');
+  } else {
+    const why = (res.extracted && res.extracted.reason) || 'nothing readable found';
+    say(`Didn't store it: ${why}.`, 'err');
+  }
+  refresh();
 });
 
 $('diagnose').addEventListener('click', async () => {

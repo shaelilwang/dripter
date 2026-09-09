@@ -91,10 +91,33 @@
       '[data-testid="longformRichTextView"]',
     ],
 
-    // Article title on the Article page.
-    articleTitle: [
+    /*
+     * Article title, by a testid specific enough to search the whole page.
+     *
+     * CONFIRMED live: data-testid="twitter-article-title" — hyphenated, while
+     * the body is camelCase (twitterArticleRichTextView). X mixes both
+     * conventions, so guessing the casing from the other one is how this was
+     * missed for so long. The wildcard catches either style if they rename it.
+     *
+     * The title sits OUTSIDE the rich-text body, so this has to be looked up
+     * page-wide — which is only safe because these names can't match anything
+     * but an article title.
+     */
+    articleTitleExact: [
+      '[data-testid="twitter-article-title"]',
       '[data-testid="twitterArticleTitle"]',
-      '[data-testid="articleTitle"]',
+      '[data-testid*="article-title" i]',
+      '[data-testid*="articletitle" i]',
+    ],
+
+    /*
+     * Looser title candidates. Ends in a bare `h1`, so this one may ONLY be
+     * queried scoped to the article body — page-wide it returns X's own
+     * chrome heading ("Conversation").
+     */
+    articleTitle: [
+      '[data-testid="twitter-article-title"]',
+      '[data-testid="twitterArticleTitle"]',
       'h1[role="heading"]',
       'h1',
     ],
@@ -140,6 +163,7 @@
     cell:             { pages: /^\/(home)?$|^\/i\// },
     articleBody:      { pages: /\/status\/|\/article\// , note: 'Article pages only' },
     articleTitle:     { pages: /\/status\/|\/article\// , note: 'Article pages only' },
+    articleTitleExact:{ optional: true, note: 'only on a native Article page' },
     articleLink:      { optional: true, note: 'X usually omits it; articleMarker covers detection' },
     articleMarker:    { optional: true, note: 'only present on a native Article' },
     threadHint:       { optional: true },
