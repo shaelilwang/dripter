@@ -200,6 +200,17 @@ $('rechunk').addEventListener('click', async () => {
   }
 });
 
+$('refetch').addEventListener('click', async () => {
+  const label = filter === 'all' ? 'every article' : `every "${filter}" article`;
+  if (!confirm(`Re-open ${label} and read it again? Use this when the stored text ` +
+    'itself is wrong — re-chunking only rearranges what was already captured. ' +
+    'Reading position is reset for those articles.')) return;
+  const n = await store.requeueMany(filter);
+  say(n ? `${n} queued — now run "Fetch article bodies" from the popup.`
+        : 'Nothing to re-fetch.', 'ok');
+  renderLibrary();
+});
+
 $('bulk-remove').addEventListener('click', async () => {
   if (!confirm('Remove finished articles from the library? They can be harvested again later.')) return;
   say(`Removed ${await store.removeMany('done')}.`, 'ok');
@@ -440,12 +451,19 @@ async function renderDiagnosis() {
         'the body text was captured.');
     }
   }
-  if (lastDiagnosis.storedItem && typeof lastDiagnosis.storedItem === 'object' &&
+  const stored = lastDiagnosis.storedItem;
+  if (stored && typeof stored === 'object' &&
+      lastDiagnosis.blockCount > 3 && stored.storedBlocks <= 1) {
+    verdicts.push(`The stored copy holds ${stored.storedBlocks} block(s) while this ` +
+      `page yields ${lastDiagnosis.blockCount} — it was captured by an older ` +
+      'extractor. Re-chunking cannot fix that; use "Re-fetch" in the library, ' +
+      'then run "Fetch article bodies".');
+  }
+  if (stored && typeof stored === 'object' &&
       lastDiagnosis.titleChosen &&
-      lastDiagnosis.storedItem.title !== lastDiagnosis.titleChosen) {
-    verdicts.push('The stored copy still has the OLD title ' +
-      `("${lastDiagnosis.storedItem.title}") — re-chunk or re-fetch to pick up ` +
-      `"${lastDiagnosis.titleChosen}".`);
+      stored.title !== lastDiagnosis.titleChosen) {
+    verdicts.push(`The stored copy still has the old title ("${stored.title}") — ` +
+      `re-chunk or re-fetch to pick up "${lastDiagnosis.titleChosen}".`);
   }
 
   const v = document.createElement('div');

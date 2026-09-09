@@ -399,6 +399,29 @@
     return n;
   }
 
+  /**
+   * Put items back in the fetch queue for a fresh read.
+   *
+   * Re-chunking can only rearrange the blocks already stored. An item
+   * captured by an older extractor may hold one undifferentiated block with
+   * no headings at all, and no amount of re-chunking recovers structure that
+   * was never captured — that needs opening the page again.
+   */
+  async function requeueMany(state) {
+    const items = await getItems();
+    let n = 0;
+    for (const it of Object.values(items)) {
+      if (!matches(it, state)) continue;
+      if (it.state === 'pending') continue;
+      items[it.id] = Object.assign({}, it, {
+        state: 'pending', snippets: [], cursor: 0, snoozedUntil: 0,
+      });
+      n++;
+    }
+    if (n) await set({ items });
+    return n;
+  }
+
   /** Drop everything in `state` from the library entirely. */
   async function removeMany(state) {
     const items = await getItems();
@@ -463,7 +486,7 @@
     getItems, getItem, upsertItem, upsertMany, updateItem, removeItem,
     setSnippets, peekNext, peekItem, consume, resetItem, markDone,
     stepBack, snooze,
-    markManyDone, retryFailed, removeMany, rechunkAll,
+    markManyDone, retryFailed, removeMany, requeueMany, rechunkAll,
     counts, exportAll, importAll,
   };
 

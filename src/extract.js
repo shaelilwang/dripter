@@ -186,12 +186,64 @@
       if (t) return t;
     }
 
-    // The heading the article opens with is its title.
+    // The heading the article opens with is its title, when it has one.
     if (blocks.length && blocks[0].type === 'heading' && blocks[0].text) {
       return blocks[0].text;
     }
 
-    return null;
+    return titleAboveBody(bodyEl);
+  }
+
+  // X's own furniture around an article. None of these is a title.
+  const CHROME_LABELS = new Set([
+    'article', 'conversation', 'post', 'thread', 'home', 'explore', 'search',
+    'notifications', 'messages', 'bookmarks', 'profile', 'communities',
+    'lists', 'premium', 'more', 'grok', 'jobs', 'verified', 'replies',
+  ]);
+
+  /**
+   * Find the article's title in the region above its body.
+   *
+   * On a live Article page the title is NOT a heading: the only h1/h2 outside
+   * the rich-text body are X's chrome ("Article", "Conversation"), and the h2s
+   * inside it are the article's own section headings. So there is nothing to
+   * match on by tag or testid — but the title is, reliably, the largest text
+   * rendered above the body.
+   *
+   * Restricted to what precedes the body inside the main column, so section
+   * headings and reply furniture can't be mistaken for it, and gated on a
+   * font size well above body copy so that finding nothing yields nothing
+   * rather than a confident guess.
+   */
+  function titleAboveBody(bodyEl) {
+    const scope = sel.q('primaryColumn');
+    if (!scope || !bodyEl || !scope.contains(bodyEl)) return null;
+
+    const candidates = [];
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
+    let node;
+
+    while ((node = walker.nextNode())) {
+      if (node === bodyEl) break;          // everything after this is body/replies
+      if (node.contains(bodyEl)) continue; // ancestors wrap the whole page
+
+      const text = tidy(node.innerText);
+      if (!text || text.length < 8 || text.length > 200) continue;
+      if (text.includes('\n')) continue;              // a title is one line
+      if (CHROME_LABELS.has(text.toLowerCase())) continue;
+
+      const size = parseFloat(getComputedStyle(node).fontSize) || 0;
+      if (size < 20) continue;                        // body copy and smaller
+
+      candidates.push({ text, size, depth: node.querySelectorAll('*').length });
+    }
+
+    if (!candidates.length) return null;
+
+    // Biggest type wins; among equals prefer the tightest element wrapping the
+    // text, so we get the title itself rather than a container around it.
+    candidates.sort((a, b) => (b.size - a.size) || (a.depth - b.depth));
+    return candidates[0].text;
   }
 
   /**
@@ -459,6 +511,26 @@
       report.quality = assessBlocks(blocks, bodyEl);
       report.titleSelectorInBody = sel.pick('articleTitle', bodyEl);
       report.titleChosen = articleTitleFor(bodyEl, blocks);
+      report.titleAboveBody = titleAboveBody(bodyEl);
+
+      // Every large line above the body, so a wrong pick is visible.
+      const scope2 = sel.q('primaryColumn');
+      if (scope2 && scope2.contains(bodyEl)) {
+        const cands = [];
+        const w = document.createTreeWalker(scope2, NodeFilter.SHOW_ELEMENT);
+        let n;
+        while ((n = w.nextNode())) {
+          if (n === bodyEl) break;
+          if (n.contains(bodyEl)) continue;
+          const t = tidy(n.innerText);
+          if (!t || t.length < 8 || t.length > 200 || t.includes('\n')) continue;
+          const size = parseFloat(getComputedStyle(n).fontSize) || 0;
+          if (size < 16) continue;
+          cands.push({ text: t.slice(0, 90), size, tag: n.tagName.toLowerCase(),
+            testid: n.getAttribute('data-testid') || null });
+        }
+        report.titleCandidates = cands.sort((a, b) => b.size - a.size).slice(0, 8);
+      }
     }
 
     // And what we already hold for this page, which is what the card shows.
@@ -487,6 +559,6 @@
   root.AD.extract = {
     extractInto, extractArticle, extractThread,
     blocksFromArticle, dropTitleEcho, findProseFallback, assessBlocks,
-    articleTitleFor, threadTitleFrom, diagnose,
+    articleTitleFor, threadTitleFrom, titleAboveBody, diagnose,
   };
 })(globalThis);

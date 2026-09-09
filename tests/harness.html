@@ -635,6 +635,85 @@
       bare.remove();
     }
 
+    section('title above the body');
+    {
+      const { titleAboveBody, articleTitleFor, blocksFromArticle } = AD.extract;
+
+      // Modelled on a real diagnosis of an X Article page: the title is not a
+      // heading at all. The only h1/h2 outside the body are X's chrome, and
+      // every h2 inside it is one of the article's section headings.
+      const col = document.createElement('div');
+      col.setAttribute('data-testid', 'primaryColumn');
+      col.innerHTML =
+        '<h2>Article</h2>' +
+        '<div><span>cover</span></div>' +
+        '<div style="font-size:32px">Seven Ways to Build an LLM Judge</div>' +
+        '<div style="font-size:15px">Josh Rosen · Sep 8, 2026</div>' +
+        '<div data-testid="twitterArticleRichTextView">' +
+          '<div>LLM-as-judge is already a common part of building applications.</div>' +
+          '<h2>Start With Another Model</h2>' +
+          '<div>The model evaluation world spent years on this problem already.</div>' +
+          '<h2>Judge the Work Instead of the Answer</h2>' +
+          '<div>A correct answer arrived at by luck looks identical to one that was not.</div>' +
+        '</div>' +
+        '<h1>Conversation</h1>';
+      document.body.appendChild(col);
+
+      const bodyEl = col.querySelector('[data-testid="twitterArticleRichTextView"]');
+      eq2('finds the title above the body',
+        titleAboveBody(bodyEl), 'Seven Ways to Build an LLM Judge');
+
+      const blocks = blocksFromArticle(bodyEl);
+      eq2('and that is what the pipeline chooses',
+        articleTitleFor(bodyEl, blocks), 'Seven Ways to Build an LLM Judge');
+
+      check('X chrome is never mistaken for a title',
+        !['Article', 'Conversation'].includes(titleAboveBody(bodyEl)));
+      check('a section heading inside the body is not promoted',
+        titleAboveBody(bodyEl) !== 'Judge the Work Instead of the Answer');
+      check('section headings stay in the body as headings',
+        blocks.filter((b) => b.type === 'heading').length === 2,
+        JSON.stringify(blocks.map((b) => b.type)));
+      col.remove();
+    }
+    {
+      // Nothing large above the body: claim nothing rather than guess.
+      const col = document.createElement('div');
+      col.setAttribute('data-testid', 'primaryColumn');
+      col.innerHTML = '<h2>Article</h2><div style="font-size:15px">Josh Rosen · Sep 8</div>' +
+        '<div data-testid="twitterArticleRichTextView"><div>Body prose here.</div></div>';
+      document.body.appendChild(col);
+      eq2('no large line above the body means no title',
+        AD.extract.titleAboveBody(
+          col.querySelector('[data-testid="twitterArticleRichTextView"]')), null);
+      col.remove();
+    }
+
+    section('re-fetch requeues stale captures');
+    {
+      __resetStorage();
+      await store.upsertItem({ id: 'STALE', url: 'u', kind: 'article',
+        title: 'Josh Rosen', author: { name: 'Josh Rosen', handle: 'j' } });
+      // One undifferentiated block: what an older extractor produced. No
+      // amount of re-chunking recovers structure that was never captured.
+      await store.updateItem('STALE', {
+        blocks: [{ type: 'para', text: 'Everything in one lump. '.repeat(40) }],
+      });
+      await store.setSnippets('STALE', [{ text: 'x', kind: 'para' }]);
+      await store.consume('STALE', 0);
+
+      eq2('re-chunk cannot recover the structure',
+        (await store.getItem('STALE')).blocks.length, 1);
+
+      eq2('re-fetch requeues it', await store.requeueMany('all'), 1);
+      const it = await store.getItem('STALE');
+      eq2('it is pending again', it.state, 'pending');
+      eq2('snippets are cleared for a fresh read', it.snippets.length, 0);
+      eq2('and the position resets', it.cursor, 0);
+      eq2('an already-pending item is not counted twice',
+        await store.requeueMany('all'), 0);
+    }
+
     section('re-chunk repairs old titles');
     {
       __resetStorage();

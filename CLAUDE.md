@@ -44,6 +44,20 @@ though anything goes at call time.
 
 ## Things that will bite you
 
+**An Article page's title is not a heading.** Confirmed by diagnosing a live
+Article: the only h1/h2 outside the rich-text body are X's own chrome
+("Article", "Conversation"), and every h2 inside it is one of the article's
+section headings. `titleAboveBody()` therefore finds the title by type size —
+the largest single line rendered above the body, inside primaryColumn, at 20px
+or more. Nothing found means no title claimed; the harvested name stands in.
+`[data-testid="twitterArticleRichTextView"]` is confirmed as the body selector.
+
+**Re-chunk cannot fix a bad capture.** It only rearranges stored blocks. An
+item captured by an older extractor can hold one undifferentiated block with
+no headings, and that needs `requeueMany()` plus a fetch to read the page
+again. The diagnostic flags this by comparing stored block count against what
+the live page yields.
+
 **Selectors are unverified against live x.com.** They were written from X's
 long-standing `data-testid` conventions, not observed from a logged-in
 session — nobody has been able to confirm them. If the user reports "nothing

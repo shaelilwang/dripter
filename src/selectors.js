@@ -78,6 +78,9 @@
     ],
 
     // The rendered body of a native Article, on the Article page itself.
+    // twitterArticleRichTextView is CONFIRMED against a live Article page:
+    // 11.5k characters, 99.5% coverage. Keep it first.
+    //
     // Deliberately NO generic tweetText fallback: it matched any ordinary
     // post, which made the Doctor report a false green and let
     // extractArticle() mistake a random post for an article body. When these
