@@ -17,12 +17,12 @@ browser against the session you're already logged into.
 2. **Fetch** — opens each one in a background window, which is where the
    Article body actually lives, and works out what it really is: Article,
    thread, long post, or not worth dripping.
-3. **Chunk** — splits it by *structure*, never by length. Sections (heading to
-   heading) and thread posts are the units, and adjacent ones are merged until
-   an article fits in at most 5 cards. Only the boundaries move — the text is
-   verbatim. Nothing is cut, reworded, bulleted or quoted that wasn't already,
-   and a line is only shown as a heading if the source marked it up as one.
-   Cards clamp overflow behind "Show more", as X does with its own long posts.
+3. **Chunk** — cuts it into ~1000-character cards, breaking only between
+   paragraphs and sentences the author already wrote. A sentence is never split
+   and nothing is ever inserted: no ellipses, no bullets or quote marks that
+   weren't already there, and a line is only shown as a heading if the source
+   marked it up as one. Cards clamp overflow behind "Show more", as X does with
+   its own long posts.
 4. **Drip** — as you scroll `/home`, inserts a snippet card after every Nth
    real post. Each card tracks where you are (`12 / 47`) and remembers.
 
@@ -68,8 +68,8 @@ and the on/off switch.
 | Setting | Default | What it does |
 |---|---|---|
 | Insert a snippet every | 4 posts | Card density in the feed |
-| Cards per article | 5 | An article becomes at most this many cards, merged at section boundaries |
-| Maximum card length | 0 (off) | Above 0, splits sentences to hit a length and inserts ellipses — changes what you read |
+| Card size | 1000 chars | Roughly how much text a card carries. Splits only between paragraphs and sentences |
+| Cards per article | 0 (off) | Optional cap; above 0 it merges whole sections and overrides card size |
 | Order | Sequential | Finish one article before starting the next |
 | Count as read after | 900 ms | Dwell time before a card auto-advances |
 | Minimum thread length | 3 posts | Shorter self-threads get skipped |

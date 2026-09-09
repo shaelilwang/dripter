@@ -38,16 +38,13 @@
      * Chasing a target length is what turned one thread into 264 cards
      * showing a single bullet each.
      */
-    // Hard ceiling on cards per article. Sections are merged at their own
-    // boundaries to reach it — text is never cut or rewritten to fit.
-    maxCards: 5,
-    // 0 = never split text to hit a length. Any positive value re-enables
-    // sentence-level splitting, which inserts ellipsis marks at the seams and
-    // therefore alters what you read; leave it off unless you want that.
-    maxChars: 0,
-    minChars: 40,    // below this a trailing chunk is a "runt" worth merging
-    mergeRunts: true,
-    groupBySection: true,
+    // Roughly how much text a card carries. Splitting happens only at
+    // paragraph and sentence boundaries the author already wrote, and never
+    // by inserting or removing characters. 0 means no target at all.
+    maxChars: 1000,
+    // Optional hard ceiling on cards per article, reached by merging whole
+    // sections. 0 = off, which lets maxChars decide how many cards there are.
+    maxCards: 0,
   };
 
   // Words that end in a period and essentially never end a sentence.
@@ -161,103 +158,27 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* oversized-sentence splitting                                        */
+  /* sentence packing                                                    */
   /* ------------------------------------------------------------------ */
 
   /**
-   * Split `s` into a head no longer than `budget` and the remainder.
-   * Prefers a clause boundary in the back half of the budget, then a word
-   * boundary. Adds ellipsis marks so the seam is visible.
+   * Split one long paragraph into card-sized pieces at sentence boundaries.
+   *
+   * A sentence longer than the target is emitted whole rather than cut. The
+   * previous version broke mid-sentence and stitched ellipses over the seam,
+   * which meant the reader saw text the author never wrote.
    */
-  function forceSplit(s, budget) {
-    // Reserve two chars: the worst case appends " …" to the head.
-    const room = Math.max(1, budget - 2);
-    const floor = Math.floor(room * 0.55);
-    const window = s.slice(0, room);
-
-    let cut = -1;
-
-    // Clause boundaries, best first.
-    const clausePatterns = [
-      /[;—]\s/g,          // semicolon, em dash
-      /[:–]\s/g,          // colon, en dash
-      /,\s(?=(?:and|but|or|which|who|that|while|because|although|though|so)\b)/g,
-      /,\s/g,
-    ];
-    for (const re of clausePatterns) {
-      re.lastIndex = 0;
-      let m;
-      let best = -1;
-      while ((m = re.exec(window)) !== null) {
-        const idx = m.index + m[0].length;
-        if (idx >= floor && idx <= room) best = idx;
-      }
-      if (best > 0) { cut = best; break; }
-    }
-
-    // Fall back to the last space in the window.
-    if (cut < 0) {
-      const sp = window.lastIndexOf(' ');
-      cut = sp > floor ? sp + 1 : room;
-    }
-
-    const head = s.slice(0, cut).replace(/\s+$/, '');
-    const rest = s.slice(cut).replace(/^\s+/, '');
-    if (!rest) return [head, ''];
-
-    // Don't double up punctuation when the head already ends in one.
-    const headOut = /[.,;:—–]$/.test(head)
-      ? head + ELLIPSIS
-      : head + ' ' + ELLIPSIS;
-
-    return [headOut, ELLIPSIS + ' ' + rest];
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* packing                                                             */
-  /* ------------------------------------------------------------------ */
-
-  function packParagraph(text, opts) {
-    const sentences = splitSentences(text);
+  function packSentences(text, target) {
     const out = [];
     let cur = '';
-
-    const flushOversized = () => {
-      while (cur.length > opts.maxChars) {
-        const [head, rest] = forceSplit(cur, opts.maxChars);
-        out.push(head);
-        cur = rest;
-        if (!cur) break;
-      }
-    };
-
-    for (const s of sentences) {
-      if (!cur) {
-        cur = s;
-      } else if (cur.length + 1 + s.length <= opts.maxChars) {
-        cur += ' ' + s;
-      } else {
-        out.push(cur);
-        cur = s;
-      }
-      flushOversized();
+    for (const sentence of splitSentences(text)) {
+      if (!cur) { cur = sentence; continue; }
+      if (cur.length + 1 + sentence.length <= target) cur += ' ' + sentence;
+      else { out.push(cur); cur = sentence; }
     }
     if (cur) out.push(cur);
-
-    // Merge a too-short trailing chunk back into its predecessor when the
-    // combined length still fits. Avoids stranding "It didn't." on its own.
-    if (opts.mergeRunts && out.length > 1) {
-      const lastIdx = out.length - 1;
-      const a = out[lastIdx - 1];
-      const b = out[lastIdx];
-      if (b.length < opts.minChars &&
-          !b.startsWith(ELLIPSIS) &&
-          a.length + 1 + b.length <= opts.maxChars) {
-        out.splice(lastIdx - 1, 2, a + ' ' + b);
-      }
-    }
-
-    return out;
+    // No sentence boundaries at all: keep it in one piece.
+    return out.length ? out : [text];
   }
 
   /* ------------------------------------------------------------------ */
@@ -280,19 +201,20 @@
   }
 
   /**
-   * Turn a section's paragraphs into cards.
+   * Pack paragraphs into cards of roughly `target` characters.
    *
-   * Default behaviour is to keep the whole section together — the author's
-   * own boundary is the right one. The cap only intervenes for a runaway
-   * section, and even then it breaks between paragraphs; a sentence-level
-   * split happens only when one paragraph alone exceeds the cap.
+   * Breaks ONLY where the author already broke: between paragraphs first,
+   * and between sentences when a single paragraph overruns on its own. A
+   * sentence is never cut, and nothing is ever inserted — no ellipses, no
+   * markers. If one sentence is longer than the target, that card is simply
+   * longer; mangling the text to hit a number is not a trade worth making.
    *
-   * A paragraph marked `atomic` is never merged with its neighbours. Thread
-   * posts use that: a post is already a unit and shouldn't be glued to the
-   * next one or torn apart.
+   * A paragraph marked `atomic` never merges with its neighbours. Thread
+   * posts use that: a post is the author's unit, so it starts its own card
+   * and the next one doesn't get glued onto it.
    */
-  function packSection(paras, opts) {
-    const cap = opts.maxChars > 0 ? opts.maxChars : Infinity;
+  function packToTarget(paras, target) {
+    const cap = target > 0 ? target : Infinity;
     const out = [];
     let cur = '';
     const flush = () => { if (cur) { out.push(cur); cur = ''; } };
@@ -303,18 +225,19 @@
       if (para.atomic) {
         flush();
         if (text.length <= cap) out.push(text);
-        else for (const piece of packParagraph(text, { ...opts, maxChars: cap })) out.push(piece);
+        else for (const piece of packSentences(text, cap)) out.push(piece);
         continue;
       }
 
       if (text.length > cap) {
         flush();
-        for (const piece of packParagraph(text, { ...opts, maxChars: cap })) out.push(piece);
+        for (const piece of packSentences(text, cap)) out.push(piece);
         continue;
       }
 
-      const candidate = cur ? cur + joinerFor(cur, text) + text : text;
-      if (candidate.length <= cap) cur = candidate;
+      if (!cur) { cur = text; continue; }
+      const joiner = joinerFor(cur, text);
+      if (cur.length + joiner.length + text.length <= cap) cur += joiner + text;
       else { flush(); cur = text; }
     }
 
@@ -425,23 +348,29 @@
     return groups;
   }
 
-  /** Flatten a group of sections into one card's text, verbatim. */
+  /** Flatten a group of sections into card-sized pieces, verbatim. */
   function groupText(group, opts) {
-    const pieces = [];
+    const paras = [];
     group.forEach((sec, k) => {
-      // The first section's heading is shown in the card header; any further
+      // The first section's heading goes in the card header; any further
       // headings stay inline so no content is lost.
-      if (k > 0 && sec.heading) pieces.push(sec.heading);
-      for (const p of sec.paras) pieces.push(p.text);
+      if (k > 0 && sec.heading) paras.push({ text: sec.heading, atomic: false });
+      for (const p of sec.paras) paras.push(p);
     });
 
-    let text = '';
-    for (const piece of pieces) {
-      text = text ? text + joinerFor(text, piece) + piece : piece;
+    // maxChars and maxCards are alternative modes, not stacked. Asking for at
+    // most N cards means N is the answer, so the length target steps aside —
+    // and so does the rule that thread posts stand alone, since merging them
+    // is precisely what the cap asked for.
+    if (opts.maxCards > 0) {
+      let text = '';
+      for (const p of paras) {
+        text = text ? text + joinerFor(text, p.text) + p.text : p.text;
+      }
+      return text ? [text] : [];
     }
 
-    const cap = opts.maxChars > 0 ? opts.maxChars : Infinity;
-    return text.length <= cap ? [text] : packParagraph(text, { ...opts, maxChars: cap });
+    return packToTarget(paras, opts.maxChars);
   }
 
   /* ------------------------------------------------------------------ */
@@ -469,22 +398,6 @@
 
     const snippets = [];
     let i = 0;
-
-    if (!opts.groupBySection) {
-      // One card per paragraph. Kept for callers that want the old shape.
-      blocks.forEach((block, bi) => {
-        const text = normalize(block && block.text);
-        if (!text) return;
-        if (block.type === 'heading') {
-          snippets.push({ text, kind: 'heading', block: bi, i: i++ });
-          return;
-        }
-        for (const t of packParagraph(text, opts)) {
-          snippets.push({ text: t, kind: 'para', block: bi, i: i++ });
-        }
-      });
-      return snippets;
-    }
 
     // A heading rides along with the prose underneath it rather than taking a
     // card of its own — a card that is nothing but a heading tells you
@@ -524,7 +437,8 @@
     toSections,
     normalize,
     splitSentences,
-    forceSplit,
+    packSentences,
+    packToTarget,
     DEFAULTS,
   };
 

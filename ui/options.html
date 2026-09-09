@@ -35,20 +35,19 @@
     </label>
 
     <label class="field">
-      <span class="lbl">Cards per article</span>
-      <span class="hint">An article becomes at most this many cards. Sections
-        are merged at their own boundaries to fit — no text is ever cut or
-        reworded.</span>
-      <input type="number" id="maxCards" min="1" max="50" step="1"> cards
+      <span class="lbl">Card size</span>
+      <span class="hint">Roughly how much text each card carries. Splits happen
+        only between paragraphs and sentences the author already wrote — never
+        mid-sentence, and nothing is ever added or removed.</span>
+      <input type="number" id="maxChars" min="0" max="20000" step="100"> characters
     </label>
 
     <label class="field">
-      <span class="lbl">Maximum card length</span>
-      <span class="lbl" style="display:none"></span>
-      <span class="hint">Leave at 0. Above 0 this splits sentences to hit a
-        length, inserting ellipses — which changes what you read. Cards per
-        article above is the setting you want.</span>
-      <input type="number" id="maxChars" min="0" max="20000" step="100"> characters
+      <span class="lbl">Cards per article (optional)</span>
+      <span class="hint">Leave at 0 to let card size decide. Above 0 this caps
+        an article at that many cards by merging whole sections, and takes
+        precedence over card size.</span>
+      <input type="number" id="maxCards" min="0" max="50" step="1"> cards
     </label>
 
     <label class="field">

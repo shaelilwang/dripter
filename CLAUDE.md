@@ -146,12 +146,23 @@ falls back to innerText while recovering headings by matching against the
 `<h1>-<h6>` text. `assessBlocks()` reports coverage and heading ratio, and
 `extractInto` refuses an extraction that is >80% headings or <40% coverage.
 
-**Cards per article is capped by merging sections, never by cutting text.**
-`groupSections()` moves boundaries only, balanced by length with a one-step
-lookahead (closing the moment a group reaches its share starves the tail:
-twelve equal sections came out 3,3,3,2,1). `maxChars` defaults to 0 and should
-stay there — above 0 it re-enables sentence splitting, which inserts ellipses
-and alters the text.
+**Two sizing modes, not stacked.** `maxChars` (default 1000) is the normal
+driver: pack paragraphs to roughly that size, splitting an overlong paragraph
+at sentence boundaries. `maxCards` (default 0 = off) is an alternative cap that
+merges whole sections via `groupSections()`; when it is set it OVERRIDES
+maxChars entirely and atomic posts merge too, because "at most N cards" is
+exactly what was asked for. `groupSections` balances with a one-step lookahead
+— closing the moment a group reaches its share starves the tail (twelve equal
+sections came out 3,3,3,2,1).
+
+**Splitting never mutates.** `packSentences` breaks between sentences only; a
+sentence longer than the target is emitted whole. The old `forceSplit` cut
+mid-sentence and stitched ellipses over the seam, showing the reader text the
+author never wrote. It is deleted — don't bring it back.
+
+**A single unstructured post must still produce several cards.** With no
+headings the whole thing is one section, which used to mean one card and a
+feed showing exactly one drip before running dry.
 
 **Harvest reads `/i/history` as well as `/i/bookmarks`.** Same markup, and it
 is where the user actually browses.

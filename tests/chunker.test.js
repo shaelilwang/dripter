@@ -175,6 +175,9 @@ console.log('\ncards per article cap');
   eq('fewer sections than the cap are left alone',
     C.chunk([...section(1), ...section(2)], { maxCards: 5 }).length, 2);
   eq('a cap of one yields a single card', C.chunk(many, { maxCards: 1 }).length, 1);
+  check('the cap overrides the length target',
+    C.chunk(many, { maxCards: 2, maxChars: 100 }).length === 2,
+    String(C.chunk(many, { maxCards: 2, maxChars: 100 }).length));
 
   // The whole point: merging must not lose or alter a single character.
   const joined = out.map((s) => (s.heading ? s.heading + '\n' : '') + s.text).join('\n');
@@ -211,6 +214,31 @@ console.log('\ncards per article cap');
   ], { maxCards: 5 });
   check('headings with no body are still shown',
     out.map((s) => s.text).join(' ').includes('Alpha'), JSON.stringify(out));
+}
+
+console.log('\nenough cards to interleave');
+{
+  // A single long post with no headings used to collapse to one card, so the
+  // feed showed exactly one drip and then ran dry.
+  const para = 'The rollout touched every service in the fleet that quarter. ';
+  const oneBigPost = { type: 'para', atomic: true, text: para.repeat(90) }; // ~5300 chars
+  const out = C.chunk([oneBigPost], { maxChars: 1000 });
+  check('a long post yields several cards, not 1/1', out.length >= 5,
+    `got ${out.length}`);
+  check('each is near the target', out.every((x) => x.text.length <= 1000),
+    JSON.stringify(out.map((x) => x.text.length)));
+  eq('and nothing is lost',
+    out.map((x) => x.text).join(' '), para.repeat(90).trim());
+}
+{
+  // An article with no <h> markup at all is one section — still splits.
+  const body = 'Some prose about the thing. '.repeat(40);
+  const out = C.chunk([{ type: 'para', text: body }], { maxChars: 1000 });
+  check('an unstructured article still splits', out.length > 1, `got ${out.length}`);
+}
+{
+  const short = C.chunk([{ type: 'para', text: 'Just a short one.' }], { maxChars: 1000 });
+  eq('short content stays a single card', short.length, 1);
 }
 
 console.log('\nheadings come only from markup');
@@ -301,7 +329,7 @@ console.log('\npacking');
     sentences.join(' '));
 }
 
-console.log('\noversized sentences');
+console.log('\noversized content is never cut');
 {
   const long =
     'The migration touched every service in the fleet, which meant that the ' +
@@ -312,28 +340,31 @@ console.log('\noversized sentences');
   check('input really is oversized', long.length > 270, `len ${long.length}`);
 
   const out = C.chunk([{ type: 'para', text: long }], { maxChars: 270 });
-  check('splits into multiple chunks', out.length > 1, `got ${out.length}`);
-  check('every chunk within budget', out.every((s) => s.text.length <= 270),
-    `max was ${Math.max(...out.map((s) => s.text.length))}`);
-  check('seams are marked with ellipsis',
-    out.slice(1).every((s) => s.text.startsWith('…')),
-    JSON.stringify(out.map((s) => s.text.slice(0, 12))));
-  check('no chunk breaks mid-word',
-    out.every((s) => !/[A-Za-z]…$/.test(s.text)),
-    JSON.stringify(out.map((s) => s.text.slice(-14))));
-
-  const rejoined = out.map((s) => s.text)
-    .join(' ').replace(/\s*…\s*…\s*/g, ' ').replace(/\s+/g, ' ').trim();
-  eq('reassembles losslessly', rejoined, long);
+  eq('a single oversized sentence is kept whole, not cut', out.length, 1);
+  eq('and is byte-identical to the source', out[0].text, long);
+  check('no ellipsis was stitched in', !out[0].text.includes('\u2026'));
+}
+{
+  // Several sentences: these DO get split, at the boundaries between them.
+  const s1 = 'The rollout was staged across three regions over two weeks. ';
+  const many = s1.repeat(6);
+  const out = C.chunk([{ type: 'para', text: many }], { maxChars: 200 });
+  check('multiple sentences split into several cards', out.length > 1,
+    `got ${out.length}`);
+  check('every card ends on a sentence boundary',
+    out.every((x) => /[.!?]$/.test(x.text.trim())),
+    JSON.stringify(out.map((x) => x.text.slice(-12))));
+  eq('nothing is lost or added',
+    out.map((x) => x.text).join(' '), many.trim());
 }
 
 console.log('\nno-space edge case');
 {
   const wall = 'x'.repeat(600);
   const out = C.chunk([{ type: 'para', text: wall }], { maxChars: 270 });
-  check('handles a single unbroken token', out.length > 1, `got ${out.length}`);
-  check('still respects budget', out.every((s) => s.text.length <= 270),
-    `max was ${Math.max(...out.map((s) => s.text.length))}`);
+  eq('an unbreakable token is emitted whole rather than mangled',
+    out.length, 1);
+  eq('exactly as it arrived', out[0].text, wall);
 }
 
 console.log('\nnormalization');
